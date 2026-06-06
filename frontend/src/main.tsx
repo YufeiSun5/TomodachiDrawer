@@ -667,9 +667,23 @@ function getOrCreateClientId() {
   const existing = window.localStorage.getItem(key);
   if (existing) return existing;
 
-  const generated = crypto.randomUUID();
+  const generated = createClientId();
   window.localStorage.setItem(key, generated);
   return generated;
+}
+
+function createClientId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function boardLabel(boardType: string) {

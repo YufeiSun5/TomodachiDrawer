@@ -33,6 +33,7 @@
 | TD-CN-014 | `backend-ai/frontend-ai` | bug | closed | 长时间生成请求同步等待导致 Nginx 504，前端一直转圈。 | 已改为后端异步队列、任务状态轮询、排队位次和粗进度展示；连续提交两个任务均快速返回 202。 |
 | TD-CN-015 | `backend-ai/frontend-ai` | implementation | closed | 非投稿生成结果不要作为历史保存，生成列表只显示排队/运行任务。 | `/api/jobs` 只返回 active jobs；非投稿源图生成后删除，输出/预览短期临时下载并自动清理。 |
 | TD-CN-016 | `backend-ai/frontend-ai` | implementation | closed | 任务隐私、我的缩略图、分享到广场、首屏广场和按单片机分类。 | 已增加 clientId 区分我的/他人任务；他人任务匿名；生成成功可命名分享到持久化广场。 |
+| TD-CN-017 | `frontend-ai/test-ai` | bug | closed | HTTP 公网访问前端黑屏。 | `crypto.randomUUID()` 在部分非安全上下文不可用；已增加 clientId fallback 并部署前端静态文件。 |
 
 ## Board Rules
 
@@ -76,3 +77,4 @@
 - 2026-06-06 22:05 | `backend-ai/frontend-ai` | decision | privacy gallery | open | 本轮实现本地 clientId 任务隐私、匿名他人队列、我的缩略图、命名分享到广场、广场按单片机型号过滤。
 - 2026-06-06 22:52 | `test-ai` | test | privacy gallery | closed | 另一个 client 只能看到 `anonymous-1`，无真实 jobUuid/文件名/板型/下载；生成成功后可命名分享到广场，RP2040 过滤和 PNG 缩略图验证通过。
 - 2026-06-06 23:02 | `test-ai` | test | final public gallery verification | closed | 公网复验非本人直接 job 查询 404、重复名称分享到广场、RP2040 广场列表保留两个同名条目、缩略图 PNG magic 正确，结束时 active jobs 为空。
+- 2026-06-07 00:14 | `frontend-ai/test-ai` | answer | public black screen | closed | 修复 HTTP 下 `crypto.randomUUID()` 不可用导致的 React 初始化失败；部署前 active jobs 为空，公网 HTML/JS/API 200，本地 HTTP preview 截图非空。
