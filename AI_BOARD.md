@@ -31,7 +31,7 @@
 | TD-CN-012 | `test-ai` | verification | closed | 上线后验证大图裁切、TDLD/UF2 合法性和公开预览路径。 | 公网上传 800x300 PNG 裁切生成通过，PNG/TDLD/UF2 头部校验通过。 |
 | TD-CN-013 | `backend-ai/frontend-ai` | follow-up | open | 真实持久化分享广场、点赞、审核后台和作品下载库。 | 当前广场为前端示例数据；后续需要 PostgreSQL/存储、管理员审核、访客点赞和搜索排序 API。 |
 | TD-CN-014 | `backend-ai/frontend-ai` | bug | closed | 长时间生成请求同步等待导致 Nginx 504，前端一直转圈。 | 已改为后端异步队列、任务状态轮询、排队位次和粗进度展示；连续提交两个任务均快速返回 202。 |
-| TD-CN-015 | `backend-ai/frontend-ai` | implementation | open | 非投稿生成结果不要作为历史保存，生成列表只显示排队/运行任务。 | `/api/jobs` 只返回 active jobs；非投稿文件设为短期临时下载并自动清理。 |
+| TD-CN-015 | `backend-ai/frontend-ai` | implementation | closed | 非投稿生成结果不要作为历史保存，生成列表只显示排队/运行任务。 | `/api/jobs` 只返回 active jobs；非投稿源图生成后删除，输出/预览短期临时下载并自动清理。 |
 
 ## Board Rules
 
@@ -71,3 +71,4 @@
 - 2026-06-06 21:03 | `backend-ai/frontend-ai` | answer | async job queue | closed | `POST /api/jobs` 改为快速返回 202；新增 `GET /api/jobs` 和轮询字段 `queueAhead`、`progressPercent`、`startedAt`、`completedAt`。
 - 2026-06-06 21:05 | `test-ai` | test | queue verification | closed | 公网连续提交两个 800x300 裁切任务分别 0.18s/0.09s 返回；第二个显示第 2 位、前面 1 个；轮询后两个任务均 success，TDLD magic/version/end 校验通过。
 - 2026-06-06 21:10 | `backend-ai/frontend-ai` | decision | transient outputs | open | 用户要求未投稿生成结果不要保存，生成列表只显示实时和排队任务；本轮改为 active-only list 和临时文件清理。
+- 2026-06-06 21:48 | `test-ai` | test | transient active list | closed | 部署前等待线上任务 `6162ffb6...` 完成；部署后 quick 任务成功，`/api/jobs` active count=0，直接 job 查询和 TDLD 下载可用，上传源图已删除。
