@@ -22,6 +22,8 @@
 | TD-CN-003 | `backend-ai` | implementation | closed | 搭建最小 CN Web/API/Worker 测试链路。 | 已创建前端、API、Worker、Docker Compose 骨架。 |
 | TD-CN-004 | `test-ai` | verification | closed | 在服务器验证最小链路。 | 服务器 .NET build、API health、上传/下载、Worker smoke 均通过。 |
 | TD-CN-005 | `backend-ai` | follow-up | open | Docker Compose 构建未完成。 | `mcr.microsoft.com/dotnet/sdk:10.0` 镜像拉取多次超时；后续可重试或改 host publish/runtime image。 |
+| TD-CN-006 | `frontend-ai` | design | closed | 前端不是朋友收集梦想生活风格。 | 已改为原创小屋、岛屿、作品墙和软糖色工作台风格。 |
+| TD-CN-007 | `backend-ai` | deploy | closed | 上线最小可测试版。 | 已通过 systemd + Nginx 上线到 `http://49.232.169.142/tomodachi/`。 |
 
 ## Board Rules
 
@@ -50,3 +52,5 @@
 - 2026-06-06 13:13 | `backend-ai` | decision | mvp skeleton | closed | API 当前生成占位输出，真实 Core 集成待 .NET 验证后接入。
 - 2026-06-06 13:57 | `test-ai` | test | server smoke | closed | 服务器 `dotnet build`、API health、上传/下载和 Worker 启动通过。
 - 2026-06-06 13:57 | `backend-ai` | blocker | docker compose | open | Docker SDK 镜像拉取超时，Compose 构建未完成。
+- 2026-06-06 14:38 | `frontend-ai` | answer | frontend style | closed | 前端改为原创朋友收集梦想生活风格，桌面/移动构建验证通过。
+- 2026-06-06 14:38 | `backend-ai` | answer | public deploy | closed | 公网 `http://49.232.169.142/tomodachi/` 和 `/tomodachi/api/health` 验证通过。
