@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-06 14:38 +08:00
+Last updated: 2026-06-06 19:20 +08:00
 
 ## 当前阶段
 
@@ -22,6 +22,11 @@ Last updated: 2026-06-06 14:38 +08:00
 - 前端已改为原创“朋友收集梦想生活 / 小屋工作台”风格。
 - 已上线公网 IP 路径：`http://49.232.169.142/tomodachi/`。
 - 公网 API smoke 通过：`/tomodachi/api/health`、上传任务、`.tdld` 下载。
+- 后端已接入 `TomodachiDrawer.Core` 真实生成链路，移除占位输出。
+- 公网真实 TDLD 校验通过：`TDLD` magic、version `3`、终止 opcode `0x00`。
+- 公网真实 RP2040 UF2 校验通过：UF2 magic、target `0x10100000`、family `E48BFF56`。
+- 公网真实 RP2350 UF2 校验通过：family `E48BFF57`。
+- API 发布包含 SkiaSharp Linux native assets，解决服务器 `libSkiaSharp.so` 缺失问题。
 
 ## AI 工程化状态清单
 
@@ -34,13 +39,13 @@ Last updated: 2026-06-06 14:38 +08:00
 | Copilot adapter | initialized | 薄入口，指向母本文档。 |
 | Cursor adapter | initialized | 薄入口，指向母本文档。 |
 | Trae adapter | pending | 未发现 Trae 原生规则目录，暂不创建。 |
-| Web MVP skeleton | online | `frontend/`、`backend/`、`docker-compose.yml` 已创建；公网 IP 路径已上线。 |
+| Web MVP skeleton | online | `frontend/`、`backend/`、`docker-compose.yml` 已创建；公网 IP 路径已上线并接入真实生成。 |
 
 ## 后续建议
 
 - 创建 GitHub fork/备份远程后推送初始化提交。
 - 安装或使用服务器上的 .NET 10 SDK 进行上游构建验证。
-- 下一阶段接入 `TomodachiDrawer.Core` 真实 `.tdld/.uf2` 生成。
+- 下一阶段做预览图保存、审核稿件持久化和真实图库/后台。
 - Docker Compose 构建需在 .NET SDK 镜像可拉取后再验证，或改为 host publish + runtime image 流程。
 - 当前上线使用 systemd + Nginx 路径方式：API 监听 `127.0.0.1:5080`，前端挂载 `/tomodachi/`。
 - 将私密服务器计划保留在仓库外；仓库内只记录不含密码的部署边界。
@@ -58,3 +63,4 @@ Last updated: 2026-06-06 14:38 +08:00
 - 2026-06-06 13:13 | GPT-5 Codex | 新增最小 Web/API/Worker 骨架并完成前端 smoke。
 - 2026-06-06 13:57 | GPT-5 Codex | 在服务器完成 .NET 构建和 API/Worker smoke 验证。
 - 2026-06-06 14:38 | GPT-5 Codex | 优化前端风格并上线到公网 `/tomodachi/`。
+- 2026-06-06 19:20 | GPT-5 Codex | 接入真实 Core 生成并通过公网 TDLD/UF2 校验。

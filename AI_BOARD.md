@@ -24,6 +24,8 @@
 | TD-CN-005 | `backend-ai` | follow-up | open | Docker Compose 构建未完成。 | `mcr.microsoft.com/dotnet/sdk:10.0` 镜像拉取多次超时；后续可重试或改 host publish/runtime image。 |
 | TD-CN-006 | `frontend-ai` | design | closed | 前端不是朋友收集梦想生活风格。 | 已改为原创小屋、岛屿、作品墙和软糖色工作台风格。 |
 | TD-CN-007 | `backend-ai` | deploy | closed | 上线最小可测试版。 | 已通过 systemd + Nginx 上线到 `http://49.232.169.142/tomodachi/`。 |
+| TD-CN-008 | `backend-ai` | implementation | closed | 用开源仓库核心代码生成真实单片机文件。 | 已用 `TomodachiDrawer.Core` 生成 TDLD，并用上游 UF2 算法生成 RP2040/RP2350 UF2。 |
+| TD-CN-009 | `test-ai` | verification | closed | 校验服务器真实生成文件合法性。 | TDLD magic/version/end opcode、RP2040/RP2350 UF2 magic/family/target 均通过。 |
 
 ## Board Rules
 
@@ -54,3 +56,5 @@
 - 2026-06-06 13:57 | `backend-ai` | blocker | docker compose | open | Docker SDK 镜像拉取超时，Compose 构建未完成。
 - 2026-06-06 14:38 | `frontend-ai` | answer | frontend style | closed | 前端改为原创朋友收集梦想生活风格，桌面/移动构建验证通过。
 - 2026-06-06 14:38 | `backend-ai` | answer | public deploy | closed | 公网 `http://49.232.169.142/tomodachi/` 和 `/tomodachi/api/health` 验证通过。
+- 2026-06-06 19:20 | `backend-ai` | answer | core generation | closed | 后端改用 `CanvasDrawer`、`TimingSink`、`FileControllerSink` 生成真实 TDLD。
+- 2026-06-06 19:20 | `test-ai` | test | public generation | closed | 公网测试 TDLD=509 bytes；RP2040/RP2350 UF2=1024 bytes 且 family id 正确。
