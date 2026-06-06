@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
     <ProjectReference Include="..\TomodachiDrawerCn.Contracts\TomodachiDrawerCn.Contracts.csproj" />
     <ProjectReference Include="..\..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
   </ItemGroup>
