@@ -3,6 +3,7 @@ TOMODACHI_DRAWER_CN_LOCAL_PRIVATE_PLAN.md
 *.local.private.md
 *.local.env
 frontend/dist/
+frontend/*.tsbuildinfo
 output/
 .playwright-cli/
 
