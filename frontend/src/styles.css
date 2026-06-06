@@ -452,6 +452,21 @@ input[type="range"] {
   border-color: #93d9b9;
 }
 
+.job-card.running {
+  background: #f4fbfd;
+  border-color: #8fc9d8;
+}
+
+.job-card.pending {
+  background: #fffaf1;
+  border-color: #e6cf9b;
+}
+
+.job-card.failed {
+  background: #fff1ee;
+  border-color: #ffc7bd;
+}
+
 .room-number {
   display: grid;
   width: 36px;
@@ -475,6 +490,28 @@ input[type="range"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.job-message {
+  white-space: normal !important;
+}
+
+.progress-track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin: 7px 0 4px;
+  overflow: hidden;
+  background: #e4eef2;
+  border-radius: 999px;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #559bb2, #e77e6f);
+  border-radius: inherit;
+  transition: width 220ms ease;
 }
 
 .job-actions {

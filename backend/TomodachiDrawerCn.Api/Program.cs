@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 using Microsoft.AspNetCore.Http.Features;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawerCn.Api.Generation;
@@ -26,10 +27,108 @@ Directory.CreateDirectory(outputDir);
 Directory.CreateDirectory(previewDir);
 
 var jobs = new ConcurrentDictionary<string, JobRecord>();
+var queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
+{
+    SingleReader = true,
+    SingleWriter = false
+});
+var queueLock = new object();
+string? runningJobUuid = null;
+
+_ = Task.Run(async () =>
+{
+    await foreach (var jobUuid in queue.Reader.ReadAllAsync())
+    {
+        if (!jobs.TryGetValue(jobUuid, out var record))
+        {
+            continue;
+        }
+
+        lock (queueLock)
+        {
+            runningJobUuid = jobUuid;
+            record.Status = JobStatuses.Running;
+            record.QueuePosition = 1;
+            record.QueueAhead = 0;
+            record.ProgressPercent = 8;
+            record.StartedAt = DateTimeOffset.UtcNow;
+            record.Message = "正在生成绘画文件。";
+            RefreshQueuePositions(jobs, runningJobUuid);
+        }
+
+        try
+        {
+            var generated = await DrawingGenerator.GenerateAsync(
+                new GenerateDrawingRequest(
+                    record.SourceImagePath,
+                    record.OutputPath,
+                    record.BoardType,
+                    record.OutputType,
+                    record.ColourMatcher,
+                    record.TspTimeLimit,
+                    record.SwitchVersion,
+                    record.PreviewPath,
+                    record.CropX,
+                    record.CropY,
+                    record.CropSize,
+                    progress =>
+                    {
+                        record.ProgressPercent = Math.Max(record.ProgressPercent, progress.Percent);
+                        record.Message = progress.Message;
+                    }
+                )
+            );
+
+            record.OutputType = generated.OutputType;
+            record.Status = JobStatuses.Success;
+            record.ProgressPercent = 100;
+            record.QueuePosition = 0;
+            record.QueueAhead = 0;
+            record.CompletedAt = DateTimeOffset.UtcNow;
+            record.Message =
+                $"Generated with TomodachiDrawer.Core. TDLD={generated.TdldBytes} bytes, output={generated.OutputBytes} bytes, estimated draw time={generated.EstimatedDrawTime.TotalSeconds:F1}s.";
+        }
+        catch (Exception ex)
+        {
+            record.Status = JobStatuses.Failed;
+            record.ProgressPercent = 100;
+            record.QueuePosition = 0;
+            record.QueueAhead = 0;
+            record.CompletedAt = DateTimeOffset.UtcNow;
+            record.Message = ex is InvalidDataException or ArgumentException
+                ? ex.Message
+                : "生成失败，请稍后重试。";
+        }
+        finally
+        {
+            lock (queueLock)
+            {
+                if (runningJobUuid == jobUuid)
+                {
+                    runningJobUuid = null;
+                }
+
+                RefreshQueuePositions(jobs, runningJobUuid);
+            }
+        }
+    }
+});
 
 app.MapGet("/api/health", () =>
     Results.Ok(new HealthResponse("ok", "tomodachi-cn-api", DateTimeOffset.UtcNow, "0.1.0"))
 );
+
+app.MapGet("/api/jobs", () =>
+{
+    RefreshQueuePositions(jobs, runningJobUuid);
+    return Results.Ok(
+        jobs.Values
+            .OrderByDescending(job => job.CreatedAt)
+            .Take(50)
+            .Select(ToResponse)
+            .ToArray()
+    );
+});
 
 app.MapPost("/api/jobs", async (HttpRequest request) =>
 {
@@ -91,52 +190,44 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
     var cropY = ParseDoubleFormValue(form, "cropY");
     var cropSize = ParseDoubleFormValue(form, "cropSize");
 
-    GeneratedDrawing generated;
-    try
-    {
-        generated = await DrawingGenerator.GenerateAsync(
-            new GenerateDrawingRequest(
-                storedImagePath,
-                outputPath,
-                boardType,
-                outputType,
-                colourMatcher,
-                tspTimeLimit,
-                switchVersion,
-                previewPath,
-                cropX,
-                cropY,
-                cropSize
-            )
-        );
-    }
-    catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
-    {
-        return Results.BadRequest(ex.Message);
-    }
-
     var record = new JobRecord(
         jobUuid,
         Path.GetFileName(image.FileName),
         boardType,
-        generated.OutputType,
+        outputType,
         colourMatcher,
         tspTimeLimit,
-        JobStatuses.Success,
+        switchVersion,
+        JobStatuses.Pending,
+        1,
         0,
+        1,
         DateTimeOffset.UtcNow,
+        null,
+        null,
         storedImagePath,
         outputPath,
         previewPath,
-        $"Generated with TomodachiDrawer.Core. TDLD={generated.TdldBytes} bytes, output={generated.OutputBytes} bytes, estimated draw time={generated.EstimatedDrawTime.TotalSeconds:F1}s."
+        cropX,
+        cropY,
+        cropSize,
+        "任务已进入队列。"
     );
 
     jobs[jobUuid] = record;
-    return Results.Ok(ToResponse(record));
+    lock (queueLock)
+    {
+        RefreshQueuePositions(jobs, runningJobUuid);
+    }
+
+    await queue.Writer.WriteAsync(jobUuid);
+    RefreshQueuePositions(jobs, runningJobUuid);
+    return Results.Accepted($"/api/jobs/{record.JobUuid}", ToResponse(record));
 });
 
 app.MapGet("/api/jobs/{jobUuid}", (string jobUuid) =>
 {
+    RefreshQueuePositions(jobs, runningJobUuid);
     return jobs.TryGetValue(jobUuid, out var record)
         ? Results.Ok(ToResponse(record))
         : Results.NotFound();
@@ -144,7 +235,11 @@ app.MapGet("/api/jobs/{jobUuid}", (string jobUuid) =>
 
 app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid) =>
 {
-    if (!jobs.TryGetValue(jobUuid, out var record) || !File.Exists(record.OutputPath))
+    if (
+        !jobs.TryGetValue(jobUuid, out var record)
+        || record.Status != JobStatuses.Success
+        || !File.Exists(record.OutputPath)
+    )
     {
         return Results.NotFound();
     }
@@ -155,7 +250,11 @@ app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid) =>
 
 app.MapGet("/api/jobs/{jobUuid}/preview", (string jobUuid) =>
 {
-    if (!jobs.TryGetValue(jobUuid, out var record) || !File.Exists(record.PreviewPath))
+    if (
+        !jobs.TryGetValue(jobUuid, out var record)
+        || record.Status == JobStatuses.Pending
+        || !File.Exists(record.PreviewPath)
+    )
     {
         return Results.NotFound();
     }
@@ -209,24 +308,85 @@ static JobResponse ToResponse(JobRecord record) =>
         record.TspTimeLimit,
         record.Status,
         record.QueuePosition,
+        record.QueueAhead,
+        record.ProgressPercent,
         record.CreatedAt,
-        $"/api/jobs/{record.JobUuid}/download",
-        $"/api/jobs/{record.JobUuid}/preview",
+        record.StartedAt,
+        record.CompletedAt,
+        record.Status == JobStatuses.Success ? $"/api/jobs/{record.JobUuid}/download" : null,
+        File.Exists(record.PreviewPath) ? $"/api/jobs/{record.JobUuid}/preview" : null,
         record.Message
     );
 
-internal sealed record JobRecord(
+static void RefreshQueuePositions(ConcurrentDictionary<string, JobRecord> jobs, string? runningJobUuid)
+{
+    var activeJobs = jobs.Values
+        .Where(job => job.Status == JobStatuses.Pending || job.Status == JobStatuses.Running)
+        .OrderBy(job => job.CreatedAt)
+        .ToArray();
+
+    var position = 1;
+    foreach (var job in activeJobs)
+    {
+        if (job.JobUuid == runningJobUuid || job.Status == JobStatuses.Running)
+        {
+            job.QueuePosition = 1;
+            job.QueueAhead = 0;
+            job.ProgressPercent = Math.Max(job.ProgressPercent, 8);
+            position++;
+            continue;
+        }
+
+        job.QueuePosition = position;
+        job.QueueAhead = Math.Max(0, position - 1);
+        job.ProgressPercent = Math.Min(job.ProgressPercent, 5);
+        position++;
+    }
+}
+
+internal sealed class JobRecord(
     string JobUuid,
     string FileName,
     string BoardType,
     string OutputType,
     string ColourMatcher,
     int TspTimeLimit,
+    SwitchVersion SwitchVersion,
     string Status,
     int QueuePosition,
+    int QueueAhead,
+    int ProgressPercent,
     DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
     string SourceImagePath,
     string OutputPath,
     string PreviewPath,
+    double? CropX,
+    double? CropY,
+    double? CropSize,
     string Message
-);
+)
+{
+    public string JobUuid { get; } = JobUuid;
+    public string FileName { get; } = FileName;
+    public string BoardType { get; } = BoardType;
+    public string OutputType { get; set; } = OutputType;
+    public string ColourMatcher { get; } = ColourMatcher;
+    public int TspTimeLimit { get; } = TspTimeLimit;
+    public SwitchVersion SwitchVersion { get; } = SwitchVersion;
+    public string Status { get; set; } = Status;
+    public int QueuePosition { get; set; } = QueuePosition;
+    public int QueueAhead { get; set; } = QueueAhead;
+    public int ProgressPercent { get; set; } = ProgressPercent;
+    public DateTimeOffset CreatedAt { get; } = CreatedAt;
+    public DateTimeOffset? StartedAt { get; set; } = StartedAt;
+    public DateTimeOffset? CompletedAt { get; set; } = CompletedAt;
+    public string SourceImagePath { get; } = SourceImagePath;
+    public string OutputPath { get; } = OutputPath;
+    public string PreviewPath { get; } = PreviewPath;
+    public double? CropX { get; } = CropX;
+    public double? CropY { get; } = CropY;
+    public double? CropSize { get; } = CropSize;
+    public string Message { get; set; } = Message;
+}

@@ -10,10 +10,12 @@ internal static class DrawingGenerator
 {
     public static async Task<GeneratedDrawing> GenerateAsync(GenerateDrawingRequest request)
     {
+        request.ReportProgress(10, "正在读取图片。");
         await using var imageStream = File.OpenRead(request.SourceImagePath);
         using var image = SKBitmap.Decode(imageStream)
             ?? throw new InvalidDataException("The uploaded file could not be decoded as an image.");
 
+        request.ReportProgress(15, "正在按裁切框准备 256x256 画布。");
         using var preparedImage = PrepareCanvasImage(image, request);
         SavePreparedPreview(preparedImage, request.PreviewPath);
 
@@ -31,10 +33,17 @@ internal static class DrawingGenerator
         };
 
         var timingSink = new TimingSink();
-        var drawer = new CanvasDrawer(timingSink, request.SwitchVersion, _ => { });
+        var drawer = new CanvasDrawer(
+            timingSink,
+            request.SwitchVersion,
+            message => request.ReportProgress(ProgressFromMessage(message), message)
+        );
+        request.ReportProgress(20, "正在初始化绘画控制器。");
         drawer.ConnectAndConfirmController();
+        request.ReportProgress(30, "正在规划绘画路线。");
         await drawer.DrawImage(preparedImage.Copy(), drawSettings);
 
+        request.ReportProgress(95, "正在写入 TDLD 文件。");
         using (var fileSink = new FileControllerSink(tdldPath))
         {
             timingSink.ReplayTo(fileSink);
@@ -45,6 +54,7 @@ internal static class DrawingGenerator
 
         if (request.OutputType == "uf2")
         {
+            request.ReportProgress(97, "正在打包 UF2 文件。");
             var chip = request.BoardType == "rp2350" ? RpChipType.Rp2350 : RpChipType.Rp2040;
             var uf2Bytes = Uf2Builder.BuildTdldUf2(tdldBytes, chip);
             ValidateUf2(uf2Bytes, chip);
@@ -62,6 +72,34 @@ internal static class DrawingGenerator
 
     public static bool IsUf2Supported(string boardType) =>
         boardType is "rp2040" or "rp2350";
+
+    private static int ProgressFromMessage(string message)
+    {
+        if (message.Contains("Quant", StringComparison.OrdinalIgnoreCase))
+        {
+            return 35;
+        }
+
+        if (message.Contains("Detecting", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Scanning", StringComparison.OrdinalIgnoreCase))
+        {
+            return 45;
+        }
+
+        if (message.Contains("[", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TSP", StringComparison.OrdinalIgnoreCase))
+        {
+            return 70;
+        }
+
+        if (message.Contains("bucket", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Done routing", StringComparison.OrdinalIgnoreCase))
+        {
+            return 88;
+        }
+
+        return 55;
+    }
 
     private static SKBitmap PrepareCanvasImage(SKBitmap source, GenerateDrawingRequest request)
     {
@@ -168,8 +206,15 @@ internal sealed record GenerateDrawingRequest(
     string PreviewPath,
     double? CropX,
     double? CropY,
-    double? CropSize
-);
+    double? CropSize,
+    Action<GeneratedDrawingProgress>? ProgressReporter = null
+)
+{
+    public void ReportProgress(int percent, string message)
+    {
+        ProgressReporter?.Invoke(new GeneratedDrawingProgress(Math.Clamp(percent, 0, 100), message));
+    }
+}
 
 internal sealed record GeneratedDrawing(
     string OutputPath,
@@ -178,3 +223,5 @@ internal sealed record GeneratedDrawing(
     int OutputBytes,
     TimeSpan EstimatedDrawTime
 );
+
+internal sealed record GeneratedDrawingProgress(int Percent, string Message);

@@ -32,7 +32,11 @@ type Job = {
   tspTimeLimit: number;
   status: JobStatus;
   queuePosition: number;
+  queueAhead: number;
+  progressPercent: number;
   createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
   downloadUrl?: string;
   previewUrl?: string;
   message?: string;
@@ -125,6 +129,52 @@ function App() {
       setOutputType("tdld");
     }
   }, [boardType, outputType]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRecentJobs() {
+      try {
+        const response = await fetch(`${apiBase}/api/jobs`);
+        if (!response.ok) return;
+        const recentJobs = (await response.json()) as Job[];
+        if (!cancelled) {
+          setJobs(recentJobs);
+        }
+      } catch {
+        // The page still works for newly submitted jobs if loading old in-memory jobs fails.
+      }
+    }
+
+    loadRecentJobs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeJobs = jobs.filter((job) => job.status === "pending" || job.status === "running");
+    if (activeJobs.length === 0) return;
+
+    const timer = window.setInterval(async () => {
+      const updates = await Promise.all(
+        activeJobs.map(async (job) => {
+          try {
+            const response = await fetch(`${apiBase}/api/jobs/${job.jobUuid}`);
+            return response.ok ? ((await response.json()) as Job) : job;
+          } catch {
+            return job;
+          }
+        })
+      );
+
+      setJobs((current) =>
+        current.map((job) => updates.find((update) => update.jobUuid === job.jobUuid) ?? job)
+      );
+    }, 2500);
+
+    return () => window.clearInterval(timer);
+  }, [jobs]);
 
   useEffect(() => {
     if (!previewUrl) {
@@ -370,13 +420,18 @@ function App() {
           <PanelTitle icon={<Loader2 size={18} />} title="生成结果" />
           <div className="job-list">
             {jobs.length === 0 && <EmptyJobs />}
-            {jobs.map((job, index) => (
-              <article className={`job-card ${job.status}`} key={job.jobUuid}>
-                <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
-                <span className="job-copy">
-                  <strong>{job.status === "success" ? "文件已生成" : "正在排队"}</strong>
+              {jobs.map((job, index) => (
+                <article className={`job-card ${job.status}`} key={job.jobUuid}>
+                  <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="job-copy">
+                  <strong>{jobStatusText(job)}</strong>
                   <small>{job.fileName}</small>
                   <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
+                  <small>{jobQueueText(job)}</small>
+                  <span className="progress-track" aria-label={`任务进度 ${job.progressPercent}%`}>
+                    <span style={{ width: `${Math.max(2, job.progressPercent)}%` }} />
+                  </span>
+                  {job.message && <small className="job-message">{job.message}</small>}
                 </span>
                 <span className="job-actions">
                   {job.previewUrl && (
@@ -473,6 +528,30 @@ function clamp(value: number, min: number, max: number) {
 
 function stableRandomKey(value: string) {
   return Array.from(value).reduce((total, char) => total + char.charCodeAt(0), 0) % 97;
+}
+
+function jobStatusText(job: Job) {
+  if (job.status === "success") return "文件已生成";
+  if (job.status === "running") return "正在生成";
+  if (job.status === "failed") return "生成失败";
+  if (job.status === "pending") return "正在排队";
+  return job.status;
+}
+
+function jobQueueText(job: Job) {
+  if (job.status === "pending") {
+    return `前面还有 ${job.queueAhead} 个任务，你是第 ${job.queuePosition} 位`;
+  }
+
+  if (job.status === "running") {
+    return "当前正在生成";
+  }
+
+  if (job.status === "success") {
+    return "可以预览和下载";
+  }
+
+  return "请检查提示后重新提交";
 }
 
 function PanelTitle({ icon, title }: { icon: React.ReactNode; title: string }) {

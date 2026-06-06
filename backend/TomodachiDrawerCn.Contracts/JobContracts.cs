@@ -19,7 +19,11 @@ public sealed record JobResponse(
     int TspTimeLimit,
     string Status,
     int QueuePosition,
+    int QueueAhead,
+    int ProgressPercent,
     DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
     string? DownloadUrl,
     string? PreviewUrl,
     string? Message
