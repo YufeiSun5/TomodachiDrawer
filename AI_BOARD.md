@@ -75,3 +75,4 @@
 - 2026-06-06 21:48 | `test-ai` | test | transient active list | closed | 部署前等待线上任务 `6162ffb6...` 完成；部署后 quick 任务成功，`/api/jobs` active count=0，直接 job 查询和 TDLD 下载可用，上传源图已删除。
 - 2026-06-06 22:05 | `backend-ai/frontend-ai` | decision | privacy gallery | open | 本轮实现本地 clientId 任务隐私、匿名他人队列、我的缩略图、命名分享到广场、广场按单片机型号过滤。
 - 2026-06-06 22:52 | `test-ai` | test | privacy gallery | closed | 另一个 client 只能看到 `anonymous-1`，无真实 jobUuid/文件名/板型/下载；生成成功后可命名分享到广场，RP2040 过滤和 PNG 缩略图验证通过。
+- 2026-06-06 23:02 | `test-ai` | test | final public gallery verification | closed | 公网复验非本人直接 job 查询 404、重复名称分享到广场、RP2040 广场列表保留两个同名条目、缩略图 PNG magic 正确，结束时 active jobs 为空。
