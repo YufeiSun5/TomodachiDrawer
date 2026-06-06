@@ -35,3 +35,14 @@ public sealed record HealthResponse(
     DateTimeOffset CheckedAt,
     string Version
 );
+
+public sealed record GalleryResponse(
+    string GalleryId,
+    string Title,
+    string BoardType,
+    string OutputType,
+    DateTimeOffset CreatedAt,
+    int Likes,
+    string PreviewUrl,
+    string DownloadUrl
+);

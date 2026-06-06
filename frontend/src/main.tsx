@@ -10,11 +10,9 @@ import {
   ImageUp,
   Languages,
   Loader2,
-  Palette,
   Play,
   Search,
   ShieldCheck,
-  Shuffle,
   SlidersHorizontal,
   Sparkles,
   Trash2
@@ -63,18 +61,26 @@ type GallerySort = "popular" | "latest" | "random";
 
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
-const galleryItems = [
-  { title: "海边小屋", category: "建筑", likes: 328, date: "2026-06-02", tone: "aqua" },
-  { title: "午后甜点", category: "食物", likes: 214, date: "2026-06-05", tone: "peach" },
-  { title: "星星衬衫", category: "衣服", likes: 188, date: "2026-05-28", tone: "lemon" },
-  { title: "圆圆头像", category: "脸绘", likes: 171, date: "2026-06-01", tone: "pink" },
-  { title: "电视节目 Logo", category: "电视节目", likes: 89, date: "2026-06-04", tone: "blue" },
-  { title: "宠物相册", category: "宠物", likes: 73, date: "2026-05-25", tone: "green" }
+type GalleryItem = {
+  galleryId: string;
+  title: string;
+  boardType: string;
+  outputType: string;
+  createdAt: string;
+  likes: number;
+  previewUrl: string;
+  downloadUrl: string;
+};
+
+const boardFilters = [
+  { value: "all", label: "全部型号" },
+  { value: "rp2040", label: "树莓派 RP2040" },
+  { value: "rp2350", label: "树莓派 RP2350" },
+  { value: "esp32-s3", label: "ESP32-S3" }
 ];
 
-const categories = ["全部", "食物", "宠物", "专辑", "脸绘", "衣服", "建筑", "墙纸", "道路", "游戏", "电视节目", "书籍", "其他"];
-
 function App() {
+  const [clientId] = useState(() => getOrCreateClientId());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -91,8 +97,12 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [galleryQuery, setGalleryQuery] = useState("");
-  const [galleryCategory, setGalleryCategory] = useState("全部");
+  const [galleryBoard, setGalleryBoard] = useState("all");
   const [gallerySort, setGallerySort] = useState<GallerySort>("popular");
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [shareTitles, setShareTitles] = useState<Record<string, string>>({});
+  const [shareBusyJobUuid, setShareBusyJobUuid] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const selectedFileMeta = useMemo(() => {
     if (!file) return null;
@@ -114,23 +124,16 @@ function App() {
   );
 
   const filteredGallery = useMemo(() => {
-    const query = galleryQuery.trim().toLowerCase();
-    const matched = galleryItems.filter((item) => {
-      const categoryMatched = galleryCategory === "全部" || item.category === galleryCategory;
-      const queryMatched = !query || `${item.title} ${item.category}`.toLowerCase().includes(query);
-      return categoryMatched && queryMatched;
-    });
-
     if (gallerySort === "latest") {
-      return [...matched].sort((a, b) => b.date.localeCompare(a.date));
+      return [...galleryItems].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
 
     if (gallerySort === "random") {
-      return [...matched].sort((a, b) => stableRandomKey(a.title) - stableRandomKey(b.title));
+      return [...galleryItems].sort((a, b) => stableRandomKey(a.galleryId) - stableRandomKey(b.galleryId));
     }
 
-    return [...matched].sort((a, b) => b.likes - a.likes);
-  }, [galleryCategory, galleryQuery, gallerySort]);
+    return [...galleryItems].sort((a, b) => b.likes - a.likes);
+  }, [galleryItems, gallerySort]);
 
   useEffect(() => {
     if (boardType === "esp32-s3" && outputType === "uf2") {
@@ -143,7 +146,7 @@ function App() {
 
     async function loadRecentJobs() {
       try {
-        const response = await fetch(`${apiBase}/api/jobs`);
+        const response = await fetch(`${apiBase}/api/jobs?clientId=${encodeURIComponent(clientId)}`);
         if (!response.ok) return;
         const recentJobs = (await response.json()) as Job[];
         if (!cancelled) {
@@ -158,7 +161,38 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [clientId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGallery() {
+      const params = new URLSearchParams();
+      params.set("boardType", galleryBoard);
+      params.set("sort", gallerySort === "random" ? "latest" : gallerySort);
+      if (galleryQuery.trim()) {
+        params.set("q", galleryQuery.trim());
+      }
+
+      try {
+        const response = await fetch(`${apiBase}/api/gallery?${params.toString()}`);
+        if (!response.ok) return;
+        const items = (await response.json()) as GalleryItem[];
+        if (!cancelled) {
+          setGalleryItems(items);
+        }
+      } catch {
+        if (!cancelled) {
+          setGalleryItems([]);
+        }
+      }
+    }
+
+    loadGallery();
+    return () => {
+      cancelled = true;
+    };
+  }, [galleryBoard, galleryQuery, gallerySort]);
 
   useEffect(() => {
     if (activeJobs.length === 0) return;
@@ -167,7 +201,7 @@ function App() {
       const updates = await Promise.all(
         activeJobs.map(async (job) => {
           try {
-            const response = await fetch(`${apiBase}/api/jobs/${job.jobUuid}`);
+            const response = await fetch(`${apiBase}/api/jobs/${job.jobUuid}?clientId=${encodeURIComponent(clientId)}`);
             return response.ok ? ((await response.json()) as Job) : job;
           } catch {
             return job;
@@ -181,7 +215,7 @@ function App() {
     }, 2500);
 
     return () => window.clearInterval(timer);
-  }, [activeJobs]);
+  }, [activeJobs, clientId]);
 
   useEffect(() => {
     if (!previewUrl) {
@@ -244,6 +278,7 @@ function App() {
       form.append("switchVersion", switchVersion);
       form.append("colourMatcher", colourMatcher);
       form.append("tspTimeLimit", String(tspTimeLimit));
+      form.append("clientId", clientId);
       form.append("cropX", cropRect.x.toFixed(3));
       form.append("cropY", cropRect.y.toFixed(3));
       form.append("cropSize", cropRect.size.toFixed(3));
@@ -266,6 +301,36 @@ function App() {
     }
   }
 
+  async function shareToGallery(job: Job) {
+    const title = (shareTitles[job.jobUuid] || "").trim() || "未命名作品";
+    setShareBusyJobUuid(job.jobUuid);
+    setShareMessage(null);
+
+    try {
+      const form = new FormData();
+      form.append("jobUuid", job.jobUuid);
+      form.append("clientId", clientId);
+      form.append("title", title);
+
+      const response = await fetch(`${apiBase}/api/gallery`, {
+        method: "POST",
+        body: form
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const item = (await response.json()) as GalleryItem;
+      setGalleryItems((current) => [item, ...current]);
+      setShareMessage("已分享到广场。");
+    } catch (err) {
+      setShareMessage(err instanceof Error ? err.message : "分享失败。");
+    } finally {
+      setShareBusyJobUuid(null);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -279,8 +344,8 @@ function App() {
           </span>
         </a>
         <nav>
-          <a href="#studio">生成</a>
           <a href="#gallery">广场</a>
+          <a href="#studio">创作</a>
           <a href="https://github.com/Lucas7yoshi/TomodachiDrawer" target="_blank" rel="noreferrer">
             <Github size={17} /> GPL-3.0
           </a>
@@ -295,13 +360,74 @@ function App() {
           <p className="eyebrow"><Sparkles size={16} /> 公开测试版</p>
           <h1>把任意尺寸图片裁进 1:1 画布，再生成单片机绘画文件</h1>
           <p>
-            图片比例不对时，先在方形框里选取要画的部分。通过审核的作品后续会同时保留预览图和可下载文件。
+            图片比例不对时，先在方形框里选取要画的部分。生成后可以临时下载，也可以命名分享到广场。
           </p>
         </div>
         <div className="status-strip" aria-label="当前能力">
           <span><CheckCircle2 size={16} /> 大图裁切</span>
           <span><CheckCircle2 size={16} /> TDLD / UF2</span>
           <span><ShieldCheck size={16} /> 公开前审核</span>
+        </div>
+      </section>
+
+      <section className="gallery-section" id="gallery">
+        <div className="section-heading">
+          <span>
+            <Heart size={22} />
+            <strong>分享广场</strong>
+          </span>
+          <p>公开作品会显示缩略图、适用单片机型号和下载格式；作品名称允许重复。</p>
+        </div>
+
+        <div className="gallery-toolbar">
+          <label className="search-box">
+            <Search size={17} />
+            <input
+              value={galleryQuery}
+              placeholder="搜索作品名称"
+              onChange={(event) => setGalleryQuery(event.target.value)}
+            />
+          </label>
+          <Segmented
+            value={gallerySort}
+            onChange={(value) => setGallerySort(value as GallerySort)}
+            options={["popular", "latest", "random"]}
+          />
+        </div>
+
+        <div className="category-row">
+          {boardFilters.map((board) => (
+            <button
+              type="button"
+              className={board.value === galleryBoard ? "selected" : ""}
+              onClick={() => setGalleryBoard(board.value)}
+              key={board.value}
+            >
+              {board.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="gallery-grid">
+          {filteredGallery.length === 0 && (
+            <div className="empty-gallery">
+              <strong>广场还没有作品</strong>
+              <span>生成完成后可以把自己的作品命名并分享到这里。</span>
+            </div>
+          )}
+          {filteredGallery.map((item) => (
+            <article className="gallery-card" key={item.galleryId}>
+              <img className="gallery-thumb" src={`${apiBase}${item.previewUrl}`} alt={item.title} />
+              <div>
+                <strong>{item.title}</strong>
+                <small>{boardLabel(item.boardType)} · {item.outputType.toUpperCase()}</small>
+              </div>
+              <span className="like-pill"><Heart size={15} /> {item.likes}</span>
+              <a className="ghost-button gallery-download" href={`${apiBase}${item.downloadUrl}`}>
+                <Download size={15} /> 下载
+              </a>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -430,10 +556,13 @@ function App() {
             {activeJobs.map((job, index) => (
               <article className={`job-card ${job.status}`} key={job.jobUuid}>
                 <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
+                {job.previewUrl && (
+                  <img className="job-thumb" src={`${apiBase}${job.previewUrl}`} alt="我的任务缩略图" />
+                )}
                 <span className="job-copy">
                   <strong>{jobStatusText(job)}</strong>
                   <small>{job.fileName}</small>
-                  <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
+                  {job.boardType && <small>{boardLabel(job.boardType)} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>}
                   <small>{jobQueueText(job)}</small>
                   <span className="progress-track" aria-label={`任务进度 ${job.progressPercent}%`}>
                     <span style={{ width: `${Math.max(2, job.progressPercent)}%` }} />
@@ -461,10 +590,32 @@ function App() {
               <small>未投稿结果不会进入历史列表，下载窗口约 30 分钟。</small>
               {completedJobs.slice(0, 5).map((job) => (
                 <article className={`job-card compact ${job.status}`} key={job.jobUuid}>
+                  {job.previewUrl && (
+                    <img className="job-thumb" src={`${apiBase}${job.previewUrl}`} alt="我的生成缩略图" />
+                  )}
                   <span className="job-copy">
                     <strong>{jobStatusText(job)}</strong>
                     <small>{job.fileName}</small>
                     {job.message && <small className="job-message">{formatJobMessage(job.message)}</small>}
+                    {job.status === "success" && (
+                      <span className="share-row">
+                        <input
+                          value={shareTitles[job.jobUuid] ?? ""}
+                          placeholder="广场名称，可重复"
+                          onChange={(event) =>
+                            setShareTitles((current) => ({ ...current, [job.jobUuid]: event.target.value }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={shareBusyJobUuid === job.jobUuid}
+                          onClick={() => shareToGallery(job)}
+                        >
+                          {shareBusyJobUuid === job.jobUuid ? "分享中" : "分享到广场"}
+                        </button>
+                      </span>
+                    )}
                   </span>
                   <span className="job-actions">
                     {job.previewUrl && (
@@ -482,61 +633,8 @@ function App() {
               ))}
             </div>
           )}
+          {shareMessage && <div className="note-box">{shareMessage}</div>}
         </section>
-      </section>
-
-      <section className="gallery-section" id="gallery">
-        <div className="section-heading">
-          <span>
-            <Heart size={22} />
-            <strong>分享广场</strong>
-          </span>
-          <p>作品公开前必须审核。当前广场是前端示例数据，用于验证搜索、分类和排序体验。</p>
-        </div>
-
-        <div className="gallery-toolbar">
-          <label className="search-box">
-            <Search size={17} />
-            <input
-              value={galleryQuery}
-              placeholder="搜索作品或分类"
-              onChange={(event) => setGalleryQuery(event.target.value)}
-            />
-          </label>
-          <Segmented
-            value={gallerySort}
-            onChange={(value) => setGallerySort(value as GallerySort)}
-            options={["popular", "latest", "random"]}
-          />
-        </div>
-
-        <div className="category-row">
-          {categories.map((category) => (
-            <button
-              type="button"
-              className={category === galleryCategory ? "selected" : ""}
-              onClick={() => setGalleryCategory(category)}
-              key={category}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        <div className="gallery-grid">
-          {filteredGallery.map((item) => (
-            <article className="gallery-card" key={item.title}>
-              <div className={`sample-art ${item.tone}`}>
-                {gallerySort === "random" ? <Shuffle size={22} /> : <Palette size={22} />}
-              </div>
-              <div>
-                <strong>{item.title}</strong>
-                <small>{item.category} · {item.date}</small>
-              </div>
-              <span className="like-pill"><Heart size={15} /> {item.likes}</span>
-            </article>
-          ))}
-        </div>
       </section>
 
       <footer className="site-footer">
@@ -562,6 +660,22 @@ function clamp(value: number, min: number, max: number) {
 
 function stableRandomKey(value: string) {
   return Array.from(value).reduce((total, char) => total + char.charCodeAt(0), 0) % 97;
+}
+
+function getOrCreateClientId() {
+  const key = "tomodachi-cn-client-id";
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+
+  const generated = crypto.randomUUID();
+  window.localStorage.setItem(key, generated);
+  return generated;
+}
+
+function boardLabel(boardType: string) {
+  if (boardType === "rp2350") return "树莓派 RP2350";
+  if (boardType === "esp32-s3") return "ESP32-S3";
+  return "树莓派 RP2040";
 }
 
 function jobStatusText(job: Job) {

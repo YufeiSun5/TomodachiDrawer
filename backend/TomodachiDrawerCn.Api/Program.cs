@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Http.Features;
 using TomodachiDrawer.Core.Models;
@@ -22,11 +23,19 @@ var dataRoot = Environment.GetEnvironmentVariable("TOMODACHI_DATA_ROOT") ?? Path
 var uploadDir = Path.Combine(dataRoot, "uploads");
 var outputDir = Path.Combine(dataRoot, "outputs");
 var previewDir = Path.Combine(dataRoot, "previews");
+var galleryDir = Path.Combine(dataRoot, "gallery");
+var galleryPreviewDir = Path.Combine(galleryDir, "previews");
+var galleryOutputDir = Path.Combine(galleryDir, "outputs");
+var galleryIndexPath = Path.Combine(galleryDir, "gallery.json");
 Directory.CreateDirectory(uploadDir);
 Directory.CreateDirectory(outputDir);
 Directory.CreateDirectory(previewDir);
+Directory.CreateDirectory(galleryPreviewDir);
+Directory.CreateDirectory(galleryOutputDir);
 
 var jobs = new ConcurrentDictionary<string, JobRecord>();
+var galleryLock = new object();
+var gallery = LoadGallery(galleryIndexPath);
 var queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
 {
     SingleReader = true,
@@ -137,15 +146,24 @@ app.MapGet("/api/health", () =>
     Results.Ok(new HealthResponse("ok", "tomodachi-cn-api", DateTimeOffset.UtcNow, "0.1.0"))
 );
 
-app.MapGet("/api/jobs", () =>
+app.MapGet("/api/jobs", (string? clientId) =>
 {
     RefreshQueuePositions(jobs, runningJobUuid);
+    var normalizedClientId = NormalizeClientId(clientId);
+    var activeJobs = jobs.Values
+        .Where(job => job.Status == JobStatuses.Pending || job.Status == JobStatuses.Running)
+        .OrderBy(job => job.CreatedAt)
+        .ToArray();
+    var anonymousIndex = 1;
+
     return Results.Ok(
-        jobs.Values
-            .Where(job => job.Status == JobStatuses.Pending || job.Status == JobStatuses.Running)
-            .OrderByDescending(job => job.CreatedAt)
+        activeJobs
+            .Select(job =>
+            {
+                var isOwner = IsOwner(job, normalizedClientId);
+                return ToJobResponse(job, isOwner, isOwner ? null : anonymousIndex++);
+            })
             .Take(50)
-            .Select(ToResponse)
             .ToArray()
     );
 });
@@ -179,6 +197,12 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
     if (!allowedTypes.Contains(image.ContentType))
     {
         return Results.BadRequest("only PNG, JPG, and WEBP images are supported.");
+    }
+
+    var clientId = NormalizeClientId(GetFormValue(form, "clientId", ""));
+    if (string.IsNullOrWhiteSpace(clientId))
+    {
+        return Results.BadRequest("clientId is required.");
     }
 
     var jobUuid = Guid.NewGuid().ToString("N");
@@ -215,6 +239,7 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
         Path.GetFileName(image.FileName),
         boardType,
         outputType,
+        clientId,
         colourMatcher,
         tspTimeLimit,
         switchVersion,
@@ -242,21 +267,24 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
 
     await queue.Writer.WriteAsync(jobUuid);
     RefreshQueuePositions(jobs, runningJobUuid);
-    return Results.Accepted($"/api/jobs/{record.JobUuid}", ToResponse(record));
+    return Results.Accepted($"/api/jobs/{record.JobUuid}", ToOwnerJobResponse(record));
 });
 
-app.MapGet("/api/jobs/{jobUuid}", (string jobUuid) =>
+app.MapGet("/api/jobs/{jobUuid}", (string jobUuid, string? clientId) =>
 {
     RefreshQueuePositions(jobs, runningJobUuid);
+    var normalizedClientId = NormalizeClientId(clientId);
     return jobs.TryGetValue(jobUuid, out var record)
-        ? Results.Ok(ToResponse(record))
+        ? Results.Ok(ToJobResponse(record, IsOwner(record, normalizedClientId), null))
         : Results.NotFound();
 });
 
-app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid) =>
+app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid, string? clientId) =>
 {
+    var normalizedClientId = NormalizeClientId(clientId);
     if (
         !jobs.TryGetValue(jobUuid, out var record)
+        || !IsOwner(record, normalizedClientId)
         || record.Status != JobStatuses.Success
         || !File.Exists(record.OutputPath)
     )
@@ -268,10 +296,12 @@ app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid) =>
     return Results.File(record.OutputPath, contentType, $"{record.JobUuid}.{record.OutputType}");
 });
 
-app.MapGet("/api/jobs/{jobUuid}/preview", (string jobUuid) =>
+app.MapGet("/api/jobs/{jobUuid}/preview", (string jobUuid, string? clientId) =>
 {
+    var normalizedClientId = NormalizeClientId(clientId);
     if (
         !jobs.TryGetValue(jobUuid, out var record)
+        || !IsOwner(record, normalizedClientId)
         || record.Status == JobStatuses.Pending
         || !File.Exists(record.PreviewPath)
     )
@@ -280,6 +310,106 @@ app.MapGet("/api/jobs/{jobUuid}/preview", (string jobUuid) =>
     }
 
     return Results.File(record.PreviewPath, "image/png", $"{record.JobUuid}.png");
+});
+
+app.MapGet("/api/gallery", (string? boardType, string? q, string? sort) =>
+{
+    lock (galleryLock)
+    {
+        var normalizedBoardType = NormalizeGalleryBoardFilter(boardType);
+        var query = q?.Trim();
+        var items = gallery
+            .Where(item => normalizedBoardType == "all" || item.BoardType == normalizedBoardType)
+            .Where(item => string.IsNullOrWhiteSpace(query) || item.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        items = sort?.ToLowerInvariant() switch
+        {
+            "popular" => items.OrderByDescending(item => item.Likes).ThenByDescending(item => item.CreatedAt).ToArray(),
+            _ => items.OrderByDescending(item => item.CreatedAt).ToArray(),
+        };
+
+        return Results.Ok(items.Select(ToGalleryResponse).ToArray());
+    }
+});
+
+app.MapPost("/api/gallery", async (HttpRequest request) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest("multipart/form-data is required.");
+    }
+
+    var form = await request.ReadFormAsync();
+    var jobUuid = GetFormValue(form, "jobUuid", "");
+    var clientId = NormalizeClientId(GetFormValue(form, "clientId", ""));
+    var title = NormalizeGalleryTitle(GetFormValue(form, "title", "未命名作品"));
+
+    if (!jobs.TryGetValue(jobUuid, out var record) || !IsOwner(record, clientId))
+    {
+        return Results.NotFound();
+    }
+
+    if (record.Status != JobStatuses.Success || !File.Exists(record.OutputPath) || !File.Exists(record.PreviewPath))
+    {
+        return Results.BadRequest("job must be successful and still within the temporary download window.");
+    }
+
+    var galleryId = Guid.NewGuid().ToString("N");
+    var outputExtension = Path.GetExtension(record.OutputPath);
+    var galleryPreviewPath = Path.Combine(galleryPreviewDir, $"{galleryId}.png");
+    var galleryOutputPath = Path.Combine(galleryOutputDir, $"{galleryId}{outputExtension}");
+    File.Copy(record.PreviewPath, galleryPreviewPath, overwrite: false);
+    File.Copy(record.OutputPath, galleryOutputPath, overwrite: false);
+
+    var item = new GalleryRecord(
+        galleryId,
+        title,
+        record.BoardType,
+        record.OutputType,
+        DateTimeOffset.UtcNow,
+        0,
+        galleryPreviewPath,
+        galleryOutputPath
+    );
+
+    lock (galleryLock)
+    {
+        gallery.Add(item);
+        SaveGallery(galleryIndexPath, gallery);
+    }
+
+    return Results.Ok(ToGalleryResponse(item));
+});
+
+app.MapGet("/api/gallery/{galleryId}/preview", (string galleryId) =>
+{
+    GalleryRecord? record;
+    lock (galleryLock)
+    {
+        record = gallery.FirstOrDefault(item => item.GalleryId == galleryId);
+    }
+
+    return record is not null && File.Exists(record.PreviewPath)
+        ? Results.File(record.PreviewPath, "image/png", $"{record.GalleryId}.png")
+        : Results.NotFound();
+});
+
+app.MapGet("/api/gallery/{galleryId}/download", (string galleryId) =>
+{
+    GalleryRecord? record;
+    lock (galleryLock)
+    {
+        record = gallery.FirstOrDefault(item => item.GalleryId == galleryId);
+    }
+
+    if (record is null || !File.Exists(record.OutputPath))
+    {
+        return Results.NotFound();
+    }
+
+    var contentType = record.OutputType == "uf2" ? "application/octet-stream" : "application/vnd.tomodachi.tdld";
+    return Results.File(record.OutputPath, contentType, $"{record.GalleryId}.{record.OutputType}");
 });
 
 app.Run();
@@ -309,6 +439,38 @@ static string NormalizeBoardType(string boardType)
     };
 }
 
+static string NormalizeGalleryBoardFilter(string? boardType)
+{
+    if (string.IsNullOrWhiteSpace(boardType) || boardType.Equals("all", StringComparison.OrdinalIgnoreCase))
+    {
+        return "all";
+    }
+
+    return NormalizeBoardType(boardType);
+}
+
+static string NormalizeClientId(string? clientId)
+{
+    var normalized = (clientId ?? "").Trim();
+    return normalized.Length <= 80 && normalized.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_')
+        ? normalized
+        : "";
+}
+
+static string NormalizeGalleryTitle(string title)
+{
+    var normalized = title.Trim();
+    if (string.IsNullOrWhiteSpace(normalized))
+    {
+        return "未命名作品";
+    }
+
+    return normalized.Length > 40 ? normalized[..40] : normalized;
+}
+
+static bool IsOwner(JobRecord record, string clientId) =>
+    !string.IsNullOrWhiteSpace(clientId) && StringComparer.Ordinal.Equals(record.ClientId, clientId);
+
 static SwitchVersion ParseSwitchVersion(string switchVersion)
 {
     return switchVersion.ToLowerInvariant() switch
@@ -318,25 +480,70 @@ static SwitchVersion ParseSwitchVersion(string switchVersion)
     };
 }
 
-static JobResponse ToResponse(JobRecord record) =>
-    new(
-        record.JobUuid,
-        record.FileName,
-        record.BoardType,
-        record.OutputType,
-        record.ColourMatcher,
-        record.TspTimeLimit,
+static JobResponse ToOwnerJobResponse(JobRecord record) =>
+    ToJobResponse(record, true, null);
+
+static JobResponse ToJobResponse(JobRecord record, bool isOwner, int? anonymousIndex)
+{
+    var displayName = isOwner
+        ? record.FileName
+        : $"其他用户任务 #{anonymousIndex.GetValueOrDefault(record.QueuePosition)}";
+
+    return new(
+        isOwner ? record.JobUuid : $"anonymous-{anonymousIndex.GetValueOrDefault(record.QueuePosition)}",
+        displayName,
+        isOwner ? record.BoardType : "",
+        isOwner ? record.OutputType : "",
+        isOwner ? record.ColourMatcher : "",
+        isOwner ? record.TspTimeLimit : 0,
         record.Status,
         record.QueuePosition,
         record.QueueAhead,
         record.ProgressPercent,
         record.CreatedAt,
-        record.StartedAt,
-        record.CompletedAt,
-        record.Status == JobStatuses.Success ? $"/api/jobs/{record.JobUuid}/download" : null,
-        File.Exists(record.PreviewPath) ? $"/api/jobs/{record.JobUuid}/preview" : null,
-        record.Message
+        isOwner ? record.StartedAt : null,
+        isOwner ? record.CompletedAt : null,
+        isOwner && record.Status == JobStatuses.Success ? $"/api/jobs/{record.JobUuid}/download?clientId={record.ClientId}" : null,
+        isOwner && File.Exists(record.PreviewPath) ? $"/api/jobs/{record.JobUuid}/preview?clientId={record.ClientId}" : null,
+        isOwner ? record.Message : "其他用户任务正在处理中。"
     );
+}
+
+static GalleryResponse ToGalleryResponse(GalleryRecord record) =>
+    new(
+        record.GalleryId,
+        record.Title,
+        record.BoardType,
+        record.OutputType,
+        record.CreatedAt,
+        record.Likes,
+        $"/api/gallery/{record.GalleryId}/preview",
+        $"/api/gallery/{record.GalleryId}/download"
+    );
+
+static List<GalleryRecord> LoadGallery(string galleryIndexPath)
+{
+    if (!File.Exists(galleryIndexPath))
+    {
+        return [];
+    }
+
+    try
+    {
+        return JsonSerializer.Deserialize<List<GalleryRecord>>(File.ReadAllText(galleryIndexPath)) ?? [];
+    }
+    catch
+    {
+        return [];
+    }
+}
+
+static void SaveGallery(string galleryIndexPath, List<GalleryRecord> gallery)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(galleryIndexPath)!);
+    var options = new JsonSerializerOptions { WriteIndented = true };
+    File.WriteAllText(galleryIndexPath, JsonSerializer.Serialize(gallery, options));
+}
 
 static void CleanupTransientJobs(ConcurrentDictionary<string, JobRecord> jobs, TimeSpan retention)
 {
@@ -437,6 +644,7 @@ internal sealed class JobRecord(
     string FileName,
     string BoardType,
     string OutputType,
+    string ClientId,
     string ColourMatcher,
     int TspTimeLimit,
     SwitchVersion SwitchVersion,
@@ -460,6 +668,7 @@ internal sealed class JobRecord(
     public string FileName { get; } = FileName;
     public string BoardType { get; } = BoardType;
     public string OutputType { get; set; } = OutputType;
+    public string ClientId { get; } = ClientId;
     public string ColourMatcher { get; } = ColourMatcher;
     public int TspTimeLimit { get; } = TspTimeLimit;
     public SwitchVersion SwitchVersion { get; } = SwitchVersion;
@@ -478,3 +687,14 @@ internal sealed class JobRecord(
     public double? CropSize { get; } = CropSize;
     public string Message { get; set; } = Message;
 }
+
+internal sealed record GalleryRecord(
+    string GalleryId,
+    string Title,
+    string BoardType,
+    string OutputType,
+    DateTimeOffset CreatedAt,
+    int Likes,
+    string PreviewPath,
+    string OutputPath
+);

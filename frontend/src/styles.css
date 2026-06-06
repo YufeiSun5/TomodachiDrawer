@@ -452,6 +452,24 @@ input[type="range"] {
   border-radius: 8px;
 }
 
+.empty-gallery {
+  display: grid;
+  grid-column: 1 / -1;
+  place-items: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 18px;
+  color: #607780;
+  text-align: center;
+  background: #f7fbfd;
+  border: 1px dashed #9eced9;
+  border-radius: 8px;
+}
+
+.empty-gallery strong {
+  color: #2a4b55;
+}
+
 .empty-jobs strong {
   color: #2a4b55;
 }
@@ -459,6 +477,16 @@ input[type="range"] {
 .job-card {
   gap: 10px;
   padding: 10px;
+  background: #ffffff;
+  border: 1px solid #d7e6ea;
+  border-radius: 8px;
+}
+
+.job-thumb {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  object-fit: cover;
   background: #ffffff;
   border: 1px solid #d7e6ea;
   border-radius: 8px;
@@ -515,6 +543,31 @@ input[type="range"] {
 
 .job-message {
   white-space: normal !important;
+}
+
+.share-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.share-row input {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #c8dce3;
+  border-radius: 8px;
+}
+
+.note-box {
+  padding: 10px;
+  color: #20745d;
+  background: #effcf5;
+  border: 1px solid #bde8d2;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .progress-track {
@@ -645,6 +698,19 @@ input[type="range"] {
   background: #ffffff;
   border: 1px solid #d8e7eb;
   border-radius: 8px;
+}
+
+.gallery-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #f7fbfd;
+  border: 1px solid #d8e7eb;
+  border-radius: 8px;
+}
+
+.gallery-download {
+  width: 100%;
 }
 
 .sample-art {
@@ -796,5 +862,9 @@ input[type="range"] {
   .job-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .share-row {
+    grid-template-columns: 1fr;
   }
 }
