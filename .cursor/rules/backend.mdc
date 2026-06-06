@@ -1,0 +1,8 @@
+---
+alwaysApply: false
+globs: ["backend/**/*", "cli/**/*", "docker/**/*", "docker-compose*.yml", "*.slnx", "*.csproj"]
+---
+
+Read `.ai/instructions/backend.md`.
+
+Reuse `TomodachiDrawer.Core`, keep contracts in English, and update `AI_BOARD.md` for API/DTO/queue/deployment changes.

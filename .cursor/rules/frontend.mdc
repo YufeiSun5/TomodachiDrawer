@@ -1,0 +1,8 @@
+---
+alwaysApply: false
+globs: ["frontend/**/*"]
+---
+
+Read `.ai/instructions/frontend.md`.
+
+Build the usable upload/generation flow first, keep text i18n-ready, and do not use official Nintendo assets in production UI.

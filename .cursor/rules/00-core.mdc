@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+globs: ["**/*"]
+---
+
+Read `AGENTS.md` first, then `MEMORY.md` and `AI_BOARD.md`.
+
+Use `.ai/instructions/` as the source of truth for detailed rules.
+
+Do not commit secrets, private deployment plans, production `.env` files, or local credentials.
+
+Do not create another active board; root `AI_BOARD.md` is the only active board.
