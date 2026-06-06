@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-06 13:13 +08:00
+Last updated: 2026-06-06 13:57 +08:00
 
 ## 当前阶段
 
@@ -15,6 +15,10 @@ Last updated: 2026-06-06 13:13 +08:00
 - 创建 TomodachiDrawer-CN 最小 Web/API/Worker 骨架。
 - 前端 `npm install`、`npm run build` 通过。
 - Vite smoke 已在 `http://localhost:5178` 截图验证桌面和移动布局非空可用。
+- 服务器 `/opt/tomodachi-drawer-cn` 已通过归档部署，不改动既有 20k 项目目录。
+- 服务器 .NET 10 SDK 已安装并完成 `dotnet restore` / `dotnet build`。
+- 服务器 API health、图片上传、任务创建、`.tdld` 下载 smoke 通过。
+- 服务器 Worker 短时启动 smoke 通过。
 
 ## AI 工程化状态清单
 
@@ -27,13 +31,14 @@ Last updated: 2026-06-06 13:13 +08:00
 | Copilot adapter | initialized | 薄入口，指向母本文档。 |
 | Cursor adapter | initialized | 薄入口，指向母本文档。 |
 | Trae adapter | pending | 未发现 Trae 原生规则目录，暂不创建。 |
-| Web MVP skeleton | initialized | `frontend/`、`backend/`、`docker-compose.yml` 已创建。 |
+| Web MVP skeleton | verified | `frontend/`、`backend/`、`docker-compose.yml` 已创建；API/Worker 已在服务器 smoke。 |
 
 ## 后续建议
 
 - 创建 GitHub fork/备份远程后推送初始化提交。
 - 安装或使用服务器上的 .NET 10 SDK 进行上游构建验证。
-- 下一阶段在服务器验证 Docker Compose，随后接入 `TomodachiDrawer.Core` 真实 `.tdld/.uf2` 生成。
+- 下一阶段接入 `TomodachiDrawer.Core` 真实 `.tdld/.uf2` 生成。
+- Docker Compose 构建需在 .NET SDK 镜像可拉取后再验证，或改为 host publish + runtime image 流程。
 - 将私密服务器计划保留在仓库外；仓库内只记录不含密码的部署边界。
 
 ## 待确认
@@ -47,3 +52,4 @@ Last updated: 2026-06-06 13:13 +08:00
 
 - 2026-06-06 12:59 | GPT-5 Codex | 初始化上游工作树与 AI 协作文档体系。
 - 2026-06-06 13:13 | GPT-5 Codex | 新增最小 Web/API/Worker 骨架并完成前端 smoke。
+- 2026-06-06 13:57 | GPT-5 Codex | 在服务器完成 .NET 构建和 API/Worker smoke 验证。
