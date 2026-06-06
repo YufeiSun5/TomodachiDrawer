@@ -274,8 +274,8 @@ app.MapGet("/api/jobs/{jobUuid}", (string jobUuid, string? clientId) =>
 {
     RefreshQueuePositions(jobs, runningJobUuid);
     var normalizedClientId = NormalizeClientId(clientId);
-    return jobs.TryGetValue(jobUuid, out var record)
-        ? Results.Ok(ToJobResponse(record, IsOwner(record, normalizedClientId), null))
+    return jobs.TryGetValue(jobUuid, out var record) && IsOwner(record, normalizedClientId)
+        ? Results.Ok(ToOwnerJobResponse(record))
         : Results.NotFound();
 });
 
