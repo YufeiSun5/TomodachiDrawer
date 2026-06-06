@@ -1,0 +1,30 @@
+services:
+  tomodachi-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "8088:80"
+    depends_on:
+      - tomodachi-api
+
+  tomodachi-api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      TOMODACHI_DATA_ROOT: /data
+    volumes:
+      - tomodachi-data:/data
+
+  tomodachi-worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    environment:
+      TOMODACHI_DATA_ROOT: /data
+    volumes:
+      - tomodachi-data:/data
+
+volumes:
+  tomodachi-data:

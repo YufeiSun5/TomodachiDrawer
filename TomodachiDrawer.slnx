@@ -9,4 +9,7 @@
     Id="6b8d11d2-e360-4ff2-8897-0b7a1596ed57"
   />
   <Project Path="TomodachiDrawer.UI.Avalonia/TomodachiDrawer.UI.Avalonia.csproj" />
+  <Project Path="backend/TomodachiDrawerCn.Contracts/TomodachiDrawerCn.Contracts.csproj" />
+  <Project Path="backend/TomodachiDrawerCn.Api/TomodachiDrawerCn.Api.csproj" />
+  <Project Path="backend/TomodachiDrawerCn.Worker/TomodachiDrawerCn.Worker.csproj" />
 </Solution>

@@ -17,9 +17,10 @@
 
 | ID | Owner | Type | Status | Item | Next Action |
 | --- | --- | --- | --- | --- | --- |
-| TD-CN-001 | `backend-ai` | setup | open | 建立可推送的 CN 备份远程，避免推送到上游作者仓库。 | 创建/确认 fork 或备份 remote 后推送初始化提交。 |
+| TD-CN-001 | `backend-ai` | setup | closed | 建立可推送的 CN 备份远程，避免推送到上游作者仓库。 | 已创建 `YufeiSun5/TomodachiDrawer` fork 并推送初始化提交。 |
 | TD-CN-002 | `test-ai` | blocker | blocked | 本机缺少 `dotnet` 和 Docker，无法本地验证 .NET 构建或容器运行。 | 在本机安装工具链，或转到服务器执行验证。 |
-| TD-CN-003 | `backend-ai` | implementation | open | 搭建最小 CN Web/API/Worker 测试链路。 | 创建前端/API/Worker 骨架和 health smoke。 |
+| TD-CN-003 | `backend-ai` | implementation | closed | 搭建最小 CN Web/API/Worker 测试链路。 | 已创建前端、API、Worker、Docker Compose 骨架。 |
+| TD-CN-004 | `test-ai` | verification | open | 在服务器验证 Docker Compose 最小链路。 | 推送 MVP 节点后，在服务器 clone/pull、构建并访问 health/UI。 |
 
 ## Board Rules
 
@@ -43,3 +44,6 @@
 
 - 2026-06-06 12:59 | `backend-ai` | decision | project setup | open | 使用上游 TomodachiDrawer 作为当前工作树基础，新增 CN 协作体系。
 - 2026-06-06 12:59 | `test-ai` | blocker | local verification | blocked | 本机缺少 `dotnet` 与 Docker，需服务器或安装工具链验证。
+- 2026-06-06 13:03 | `backend-ai` | answer | backup remote | closed | 创建并推送到 `YufeiSun5/TomodachiDrawer` fork。
+- 2026-06-06 13:13 | `frontend-ai` | test | frontend build | closed | `npm install`、`npm run build` 通过，桌面/移动截图非空。
+- 2026-06-06 13:13 | `backend-ai` | decision | mvp skeleton | closed | API 当前生成占位输出，真实 Core 集成待 .NET 验证后接入。
