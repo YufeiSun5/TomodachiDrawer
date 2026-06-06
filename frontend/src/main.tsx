@@ -5,11 +5,15 @@ import {
   Download,
   FileImage,
   Github,
+  Heart,
+  Home,
   ImageUp,
   Loader2,
+  Palette,
   Play,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Trash2
 } from "lucide-react";
 import "./styles.css";
@@ -61,7 +65,7 @@ function App() {
 
   async function createJob() {
     if (!file) {
-      setError("请先选择一张图片。");
+      setError("请先把一张图片放到小屋画架里。");
       return;
     }
 
@@ -95,25 +99,42 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="dream-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark"><FileImage size={22} /></div>
+          <div className="brand-mark">
+            <Home size={22} />
+          </div>
           <div>
             <h1>TomodachiDrawer-CN</h1>
-            <span>图片转绘画输入文件</span>
+            <span>朋友收集梦想生活 · 画作转换小屋</span>
           </div>
         </div>
         <nav>
           <a href="https://github.com/Lucas7yoshi/TomodachiDrawer" target="_blank" rel="noreferrer">
             <Github size={18} /> 源码 / GPL-3.0
           </a>
-          <span className="service-ok">服务状态：正常</span>
+          <span className="service-ok"><Sparkles size={16} /> 服务在线</span>
         </nav>
       </header>
 
+      <section className="studio-banner">
+        <div className="banner-copy">
+          <h2>把一张图片放进小屋，生成绘画控制文件</h2>
+          <p>当前是最小测试版：上传、参数、任务和下载链路已可验证；公开作品仍需管理员审核。</p>
+        </div>
+        <div className="mini-island" aria-hidden="true">
+          <span className="sun" />
+          <span className="house house-one" />
+          <span className="house house-two" />
+          <span className="tree" />
+          <span className="cloud cloud-one" />
+          <span className="cloud cloud-two" />
+        </div>
+      </section>
+
       <section className="workspace">
-        <Panel title="1. 上传图片" icon={<ImageUp size={18} />}>
+        <Panel title="上传到画架" icon={<ImageUp size={18} />} tone="mint">
           <label
             className="dropzone"
             onDragOver={(event) => event.preventDefault()}
@@ -127,19 +148,22 @@ function App() {
               accept="image/png,image/jpeg,image/webp"
               onChange={(event) => chooseFile(event.target.files?.item(0) ?? null)}
             />
-            {previewUrl ? (
-              <img src={previewUrl} alt="待生成图片预览" />
-            ) : (
-              <div className="dropzone-empty">
-                <ImageUp size={40} />
-                <strong>拖拽图片到此处，或点击选择文件</strong>
-                <span>支持 PNG / JPG / WEBP，建议小于 1024 x 1024</span>
-              </div>
-            )}
+            <div className="easel">
+              {previewUrl ? (
+                <img src={previewUrl} alt="待生成图片预览" />
+              ) : (
+                <div className="dropzone-empty">
+                  <ImageUp size={42} />
+                  <strong>点击或拖拽图片</strong>
+                  <span>PNG / JPG / WEBP，建议 256x256 以内</span>
+                </div>
+              )}
+            </div>
           </label>
 
           {selectedFileMeta && (
             <div className="file-card">
+              <FileImage size={18} />
               <div>
                 <strong>{selectedFileMeta.name}</strong>
                 <span>{selectedFileMeta.type} · {selectedFileMeta.size}</span>
@@ -150,28 +174,28 @@ function App() {
             </div>
           )}
 
-          <div className="validation-row">
+          <div className="note-row">
             <CheckCircle2 size={18} />
             <span>服务端会重新校验格式、大小并生成安全文件名。</span>
           </div>
         </Panel>
 
-        <Panel title="2. 生成参数" icon={<SlidersHorizontal size={18} />}>
-          <Field label="硬件板型">
+        <Panel title="绘画设置" icon={<SlidersHorizontal size={18} />} tone="peach">
+          <Field label="小板住户">
             <Segmented value={boardType} onChange={setBoardType} options={["rp2040", "rp2350", "esp32-s3"]} />
           </Field>
-          <Field label="输出类型">
+          <Field label="带走的文件">
             <Segmented value={outputType} onChange={setOutputType} options={["tdld", "uf2"]} />
           </Field>
-          <Field label="调色方案">
+          <Field label="调色心情">
             <select value={colourMatcher} onChange={(event) => setColourMatcher(event.target.value)}>
               <option value="arbitrary">自动匹配（推荐）</option>
-              <option value="cielab">CIE Lab</option>
-              <option value="redmean">Redmean</option>
-              <option value="euclidean">Euclidean</option>
+              <option value="cielab">柔和彩度 CIE Lab</option>
+              <option value="redmean">复古色感 Redmean</option>
+              <option value="euclidean">直接距离 Euclidean</option>
             </select>
           </Field>
-          <Field label={`TSP 优化时间：${tspTimeLimit}s`}>
+          <Field label={`路线耐心：${tspTimeLimit}s`}>
             <input
               type="range"
               min="10"
@@ -180,7 +204,7 @@ function App() {
               value={tspTimeLimit}
               onChange={(event) => setTspTimeLimit(Number(event.target.value))}
             />
-            <div className="range-labels"><span>快速</span><span>标准</span><span>高质量</span></div>
+            <div className="range-labels"><span>快画</span><span>细画</span><span>慢慢画</span></div>
           </Field>
 
           {error && <div className="error-box">{error}</div>}
@@ -191,54 +215,73 @@ function App() {
           </button>
         </Panel>
 
-        <Panel title="3. 任务状态" icon={<Loader2 size={18} />}>
-          <div className="job-list">
-            {jobs.length === 0 && <EmptyJobs />}
-            {jobs.map((job) => (
-              <article className={`job-card ${job.status}`} key={job.jobUuid}>
-                <div>
-                  <strong>{job.status === "success" ? "成功" : "排队中"}</strong>
-                  <span>{job.fileName}</span>
-                  <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
-                </div>
-                {job.downloadUrl ? (
-                  <a className="download-button" href={`${apiBase}${job.downloadUrl}`}>
-                    <Download size={16} /> 下载 {job.outputType.toUpperCase()}
-                  </a>
-                ) : (
-                  <span className="queue-chip">位置 {job.queuePosition}</span>
-                )}
-              </article>
-            ))}
+        <Panel title="小屋队列" icon={<Loader2 size={18} />} tone="sky">
+          <div className="queue-house">
+            <div className="queue-roof">任务电梯</div>
+            <div className="job-list">
+              {jobs.length === 0 && <EmptyJobs />}
+              {jobs.map((job, index) => (
+                <article className={`job-card ${job.status}`} key={job.jobUuid}>
+                  <div className="room-number">{String(index + 1).padStart(2, "0")}</div>
+                  <div>
+                    <strong>{job.status === "success" ? "绘画包已准备好" : "正在排队"}</strong>
+                    <span>{job.fileName}</span>
+                    <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
+                  </div>
+                  {job.downloadUrl ? (
+                    <a className="download-button" href={`${apiBase}${job.downloadUrl}`}>
+                      <Download size={16} /> 下载
+                    </a>
+                  ) : (
+                    <span className="queue-chip">位置 {job.queuePosition}</span>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
         </Panel>
       </section>
 
       <section className="gallery-band">
-        <div>
-          <h2>已通过作品（审核队列预览）</h2>
-          <p>公开展示前必须经管理员审核，默认生成结果不公开。</p>
+        <div className="gallery-heading">
+          <Heart size={22} />
+          <div>
+            <h2>梦想生活作品墙</h2>
+            <p>公开展示前必须经管理员审核，默认生成结果不公开。</p>
+          </div>
         </div>
         <div className="gallery-preview">
-          {["山间小屋", "像素头像", "海边灯塔", "复古游戏机"].map((item) => (
+          {["海边小屋", "圆圆头像", "午后甜点", "星星衬衫"].map((item, index) => (
             <div className="gallery-tile" key={item}>
-              <div className="tile-art" />
+              <div className={`tile-art tile-${index + 1}`}>
+                <Palette size={20} />
+              </div>
               <span>{item}</span>
             </div>
           ))}
         </div>
         <div className="license-note">
           <ShieldCheck size={22} />
-          <span>基于 TomodachiDrawer 构建，遵循 GPL-3.0 开源协议。</span>
+          <span>基于 TomodachiDrawer 构建，遵循 GPL-3.0；本站与 Nintendo 无官方关联。</span>
         </div>
       </section>
     </main>
   );
 }
 
-function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Panel({
+  title,
+  icon,
+  tone,
+  children
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tone: "mint" | "peach" | "sky";
+  children: React.ReactNode;
+}) {
   return (
-    <section className="panel">
+    <section className={`panel ${tone}`}>
       <h2>{icon}{title}</h2>
       {children}
     </section>
@@ -274,9 +317,9 @@ function Segmented({ value, options, onChange }: { value: string; options: strin
 function EmptyJobs() {
   return (
     <div className="empty-jobs">
-      <Loader2 size={28} />
-      <strong>等待生成任务</strong>
-      <span>上传图片并点击开始生成后，任务会显示在这里。</span>
+      <span className="empty-face">:)</span>
+      <strong>还没有住户排队</strong>
+      <span>上传图片并开始生成后，任务会搬进这里。</span>
     </div>
   );
 }
