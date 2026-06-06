@@ -30,7 +30,7 @@
 | TD-CN-011 | `frontend-ai` | design | closed | 参考像素广场信息结构重做前端，不照搬目标站样式。 | 已增加裁切预览、分享广场示例、搜索、按点赞排序，并完成 PC/手机截图验证。 |
 | TD-CN-012 | `test-ai` | verification | closed | 上线后验证大图裁切、TDLD/UF2 合法性和公开预览路径。 | 公网上传 800x300 PNG 裁切生成通过，PNG/TDLD/UF2 头部校验通过。 |
 | TD-CN-013 | `backend-ai/frontend-ai` | follow-up | open | 真实持久化分享广场、点赞、审核后台和作品下载库。 | 当前广场为前端示例数据；后续需要 PostgreSQL/存储、管理员审核、访客点赞和搜索排序 API。 |
-| TD-CN-014 | `backend-ai/frontend-ai` | bug | open | 长时间生成请求同步等待导致 Nginx 504，前端一直转圈。 | 改为后端异步队列、任务状态轮询、排队位次和粗进度展示。 |
+| TD-CN-014 | `backend-ai/frontend-ai` | bug | closed | 长时间生成请求同步等待导致 Nginx 504，前端一直转圈。 | 已改为后端异步队列、任务状态轮询、排队位次和粗进度展示；连续提交两个任务均快速返回 202。 |
 
 ## Board Rules
 
@@ -66,4 +66,6 @@
 - 2026-06-06 20:05 | `frontend-ai/backend-ai/test-ai` | decision | crop responsive gallery | open | 本轮处理任意尺寸裁切、分享广场筛选排序、PC/手机响应式和上线复验。
 - 2026-06-06 20:54 | `test-ai` | test | public crop generation | closed | 公网上传 800x300 PNG，裁切 300x300 生成 TDLD=3133 bytes、RP2350 UF2=6656 bytes；预览 PNG magic、TDLD magic/version/end、UF2 magic/family/target/end 均通过。
 - 2026-06-06 20:54 | `review-ai` | decision | gallery scope | open | 当前分享广场、搜索和点赞排序为前端示例能力，真实用户作品持久化、审核后台和点赞 API 进入 TD-CN-013。
-- 2026-06-06 20:22 | `test-ai` | blocker | long generation | open | 用户实测返回 Nginx 504；线上日志显示 `POST /api/jobs` 长时间同步执行 Core 生成，需要异步队列。
+- 2026-06-06 21:00 | `test-ai` | blocker | long generation | open | 用户实测返回 Nginx 504；线上日志显示 `POST /api/jobs` 长时间同步执行 Core 生成，需要异步队列。
+- 2026-06-06 21:03 | `backend-ai/frontend-ai` | answer | async job queue | closed | `POST /api/jobs` 改为快速返回 202；新增 `GET /api/jobs` 和轮询字段 `queueAhead`、`progressPercent`、`startedAt`、`completedAt`。
+- 2026-06-06 21:05 | `test-ai` | test | queue verification | closed | 公网连续提交两个 800x300 裁切任务分别 0.18s/0.09s 返回；第二个显示第 2 位、前面 1 个；轮询后两个任务均 success，TDLD magic/version/end 校验通过。
