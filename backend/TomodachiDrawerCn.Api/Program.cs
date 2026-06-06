@@ -20,8 +20,10 @@ app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader())
 var dataRoot = Environment.GetEnvironmentVariable("TOMODACHI_DATA_ROOT") ?? Path.Combine(AppContext.BaseDirectory, "data");
 var uploadDir = Path.Combine(dataRoot, "uploads");
 var outputDir = Path.Combine(dataRoot, "outputs");
+var previewDir = Path.Combine(dataRoot, "previews");
 Directory.CreateDirectory(uploadDir);
 Directory.CreateDirectory(outputDir);
+Directory.CreateDirectory(previewDir);
 
 var jobs = new ConcurrentDictionary<string, JobRecord>();
 
@@ -79,11 +81,15 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
         ? "uf2"
         : "tdld";
     var outputPath = Path.Combine(outputDir, $"{jobUuid}.{outputType}");
+    var previewPath = Path.Combine(previewDir, $"{jobUuid}.png");
     var switchVersion = ParseSwitchVersion(GetFormValue(form, "switchVersion", "switch2"));
     var tspTimeLimit = int.TryParse(GetFormValue(form, "tspTimeLimit", "30"), out var parsedTspTimeLimit)
         ? parsedTspTimeLimit
         : 30;
     var colourMatcher = GetFormValue(form, "colourMatcher", "arbitrary");
+    var cropX = ParseDoubleFormValue(form, "cropX");
+    var cropY = ParseDoubleFormValue(form, "cropY");
+    var cropSize = ParseDoubleFormValue(form, "cropSize");
 
     GeneratedDrawing generated;
     try
@@ -96,7 +102,11 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
                 outputType,
                 colourMatcher,
                 tspTimeLimit,
-                switchVersion
+                switchVersion,
+                previewPath,
+                cropX,
+                cropY,
+                cropSize
             )
         );
     }
@@ -117,6 +127,7 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
         DateTimeOffset.UtcNow,
         storedImagePath,
         outputPath,
+        previewPath,
         $"Generated with TomodachiDrawer.Core. TDLD={generated.TdldBytes} bytes, output={generated.OutputBytes} bytes, estimated draw time={generated.EstimatedDrawTime.TotalSeconds:F1}s."
     );
 
@@ -142,6 +153,16 @@ app.MapGet("/api/jobs/{jobUuid}/download", (string jobUuid) =>
     return Results.File(record.OutputPath, contentType, $"{record.JobUuid}.{record.OutputType}");
 });
 
+app.MapGet("/api/jobs/{jobUuid}/preview", (string jobUuid) =>
+{
+    if (!jobs.TryGetValue(jobUuid, out var record) || !File.Exists(record.PreviewPath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(record.PreviewPath, "image/png", $"{record.JobUuid}.png");
+});
+
 app.Run();
 
 static string GetFormValue(IFormCollection form, string key, string fallback)
@@ -149,6 +170,14 @@ static string GetFormValue(IFormCollection form, string key, string fallback)
     return form.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
         ? value.ToString()
         : fallback;
+}
+
+static double? ParseDoubleFormValue(IFormCollection form, string key)
+{
+    return form.TryGetValue(key, out var value)
+        && double.TryParse(value.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+        ? parsed
+        : null;
 }
 
 static string NormalizeBoardType(string boardType)
@@ -182,6 +211,7 @@ static JobResponse ToResponse(JobRecord record) =>
         record.QueuePosition,
         record.CreatedAt,
         $"/api/jobs/{record.JobUuid}/download",
+        $"/api/jobs/{record.JobUuid}/preview",
         record.Message
     );
 
@@ -197,5 +227,6 @@ internal sealed record JobRecord(
     DateTimeOffset CreatedAt,
     string SourceImagePath,
     string OutputPath,
+    string PreviewPath,
     string Message
 );

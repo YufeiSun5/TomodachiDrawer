@@ -14,12 +14,8 @@ internal static class DrawingGenerator
         using var image = SKBitmap.Decode(imageStream)
             ?? throw new InvalidDataException("The uploaded file could not be decoded as an image.");
 
-        if (image.Width > CanvasDrawer.CanvasWidth || image.Height > CanvasDrawer.CanvasHeight)
-        {
-            throw new InvalidDataException(
-                $"Image too big. Max is {CanvasDrawer.CanvasWidth}x{CanvasDrawer.CanvasHeight}."
-            );
-        }
+        using var preparedImage = PrepareCanvasImage(image, request);
+        SavePreparedPreview(preparedImage, request.PreviewPath);
 
         var tdldPath = Path.ChangeExtension(request.OutputPath, ".tdld");
         Directory.CreateDirectory(Path.GetDirectoryName(tdldPath)!);
@@ -37,7 +33,7 @@ internal static class DrawingGenerator
         var timingSink = new TimingSink();
         var drawer = new CanvasDrawer(timingSink, request.SwitchVersion, _ => { });
         drawer.ConnectAndConfirmController();
-        await drawer.DrawImage(image.Copy(), drawSettings);
+        await drawer.DrawImage(preparedImage.Copy(), drawSettings);
 
         using (var fileSink = new FileControllerSink(tdldPath))
         {
@@ -66,6 +62,45 @@ internal static class DrawingGenerator
 
     public static bool IsUf2Supported(string boardType) =>
         boardType is "rp2040" or "rp2350";
+
+    private static SKBitmap PrepareCanvasImage(SKBitmap source, GenerateDrawingRequest request)
+    {
+        if (source.Width <= 0 || source.Height <= 0)
+        {
+            throw new InvalidDataException("The uploaded image has invalid dimensions.");
+        }
+
+        var fallbackSize = Math.Min(source.Width, source.Height);
+        var requestedSize = request.CropSize.GetValueOrDefault(fallbackSize);
+        if (!double.IsFinite(requestedSize) || requestedSize <= 0)
+        {
+            requestedSize = fallbackSize;
+        }
+
+        var cropSize = (float)Math.Clamp(requestedSize, 1, fallbackSize);
+        var cropX = (float)Math.Clamp(request.CropX.GetValueOrDefault((source.Width - cropSize) / 2.0), 0, source.Width - cropSize);
+        var cropY = (float)Math.Clamp(request.CropY.GetValueOrDefault((source.Height - cropSize) / 2.0), 0, source.Height - cropSize);
+
+        var prepared = new SKBitmap(CanvasDrawer.CanvasWidth, CanvasDrawer.CanvasHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(prepared);
+        canvas.Clear(SKColors.White);
+        var sourceRect = SKRect.Create(cropX, cropY, cropSize, cropSize);
+        var destinationRect = SKRect.Create(0, 0, CanvasDrawer.CanvasWidth, CanvasDrawer.CanvasHeight);
+        canvas.DrawBitmap(source, sourceRect, destinationRect);
+        canvas.Flush();
+
+        return prepared;
+    }
+
+    private static void SavePreparedPreview(SKBitmap preparedImage, string previewPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(previewPath)!);
+        using var image = SKImage.FromBitmap(preparedImage);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 95)
+            ?? throw new InvalidDataException("Prepared preview image could not be encoded.");
+        using var stream = File.Create(previewPath);
+        data.SaveTo(stream);
+    }
 
     private static QuantizerSettings BuildQuantizerSettings(string colourMatcher)
     {
@@ -129,7 +164,11 @@ internal sealed record GenerateDrawingRequest(
     string OutputType,
     string ColourMatcher,
     int TspTimeLimit,
-    SwitchVersion SwitchVersion
+    SwitchVersion SwitchVersion,
+    string PreviewPath,
+    double? CropX,
+    double? CropY,
+    double? CropSize
 );
 
 internal sealed record GeneratedDrawing(

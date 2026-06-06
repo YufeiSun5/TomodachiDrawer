@@ -21,6 +21,7 @@ public sealed record JobResponse(
     int QueuePosition,
     DateTimeOffset CreatedAt,
     string? DownloadUrl,
+    string? PreviewUrl,
     string? Message
 );
 

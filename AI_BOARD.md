@@ -26,6 +26,9 @@
 | TD-CN-007 | `backend-ai` | deploy | closed | 上线最小可测试版。 | 已通过 systemd + Nginx 上线到 `http://49.232.169.142/tomodachi/`。 |
 | TD-CN-008 | `backend-ai` | implementation | closed | 用开源仓库核心代码生成真实单片机文件。 | 已用 `TomodachiDrawer.Core` 生成 TDLD，并用上游 UF2 算法生成 RP2040/RP2350 UF2。 |
 | TD-CN-009 | `test-ai` | verification | closed | 校验服务器真实生成文件合法性。 | TDLD magic/version/end opcode、RP2040/RP2350 UF2 magic/family/target 均通过。 |
+| TD-CN-010 | `backend-ai` | implementation | open | 支持任意尺寸图片按用户裁切框转换。 | API 接收裁切参数，服务端重采样为 256x256 后进入 Core。 |
+| TD-CN-011 | `frontend-ai` | design | open | 参考像素广场信息结构重做前端，不照搬目标站样式。 | 增加裁切预览、分享广场、搜索、按点赞排序，并验证 PC/手机布局。 |
+| TD-CN-012 | `test-ai` | verification | open | 上线后验证大图裁切、TDLD/UF2 合法性和公开预览路径。 | 使用公网 API 上传非正方形大图并校验输出文件头。 |
 
 ## Board Rules
 
@@ -58,3 +61,4 @@
 - 2026-06-06 14:38 | `backend-ai` | answer | public deploy | closed | 公网 `http://49.232.169.142/tomodachi/` 和 `/tomodachi/api/health` 验证通过。
 - 2026-06-06 19:20 | `backend-ai` | answer | core generation | closed | 后端改用 `CanvasDrawer`、`TimingSink`、`FileControllerSink` 生成真实 TDLD。
 - 2026-06-06 19:20 | `test-ai` | test | public generation | closed | 公网测试 TDLD=509 bytes；RP2040/RP2350 UF2=1024 bytes 且 family id 正确。
+- 2026-06-06 20:05 | `frontend-ai/backend-ai/test-ai` | decision | crop responsive gallery | open | 本轮处理任意尺寸裁切、分享广场筛选排序、PC/手机响应式和上线复验。

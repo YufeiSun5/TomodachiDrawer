@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CheckCircle2,
@@ -8,10 +8,13 @@ import {
   Heart,
   Home,
   ImageUp,
+  Languages,
   Loader2,
   Palette,
   Play,
+  Search,
   ShieldCheck,
+  Shuffle,
   SlidersHorizontal,
   Sparkles,
   Trash2
@@ -31,14 +34,50 @@ type Job = {
   queuePosition: number;
   createdAt: string;
   downloadUrl?: string;
+  previewUrl?: string;
   message?: string;
 };
 
+type ImageMetrics = {
+  width: number;
+  height: number;
+};
+
+type CropControls = {
+  centerX: number;
+  centerY: number;
+  zoom: number;
+};
+
+type CropRect = {
+  x: number;
+  y: number;
+  size: number;
+};
+
+type GallerySort = "popular" | "latest" | "random";
+
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
+const galleryItems = [
+  { title: "海边小屋", category: "建筑", likes: 328, date: "2026-06-02", tone: "aqua" },
+  { title: "午后甜点", category: "食物", likes: 214, date: "2026-06-05", tone: "peach" },
+  { title: "星星衬衫", category: "衣服", likes: 188, date: "2026-05-28", tone: "lemon" },
+  { title: "圆圆头像", category: "脸绘", likes: 171, date: "2026-06-01", tone: "pink" },
+  { title: "电视节目 Logo", category: "电视节目", likes: 89, date: "2026-06-04", tone: "blue" },
+  { title: "宠物相册", category: "宠物", likes: 73, date: "2026-05-25", tone: "green" }
+];
+
+const categories = ["全部", "食物", "宠物", "专辑", "脸绘", "衣服", "建筑", "墙纸", "道路", "游戏", "电视节目", "书籍", "其他"];
+
 function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageVersion, setImageVersion] = useState(0);
+  const [imageMetrics, setImageMetrics] = useState<ImageMetrics | null>(null);
+  const [crop, setCrop] = useState<CropControls>({ centerX: 0.5, centerY: 0.5, zoom: 1 });
   const [boardType, setBoardType] = useState("rp2040");
   const [outputType, setOutputType] = useState("tdld");
   const [switchVersion, setSwitchVersion] = useState("switch2");
@@ -47,6 +86,9 @@ function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [galleryQuery, setGalleryQuery] = useState("");
+  const [galleryCategory, setGalleryCategory] = useState("全部");
+  const [gallerySort, setGallerySort] = useState<GallerySort>("popular");
 
   const selectedFileMeta = useMemo(() => {
     if (!file) return null;
@@ -57,11 +99,69 @@ function App() {
     };
   }, [file]);
 
+  const cropRect = useMemo(() => computeCropRect(imageMetrics, crop), [imageMetrics, crop]);
+
+  const filteredGallery = useMemo(() => {
+    const query = galleryQuery.trim().toLowerCase();
+    const matched = galleryItems.filter((item) => {
+      const categoryMatched = galleryCategory === "全部" || item.category === galleryCategory;
+      const queryMatched = !query || `${item.title} ${item.category}`.toLowerCase().includes(query);
+      return categoryMatched && queryMatched;
+    });
+
+    if (gallerySort === "latest") {
+      return [...matched].sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    if (gallerySort === "random") {
+      return [...matched].sort((a, b) => stableRandomKey(a.title) - stableRandomKey(b.title));
+    }
+
+    return [...matched].sort((a, b) => b.likes - a.likes);
+  }, [galleryCategory, galleryQuery, gallerySort]);
+
   useEffect(() => {
     if (boardType === "esp32-s3" && outputType === "uf2") {
       setOutputType("tdld");
     }
   }, [boardType, outputType]);
+
+  useEffect(() => {
+    if (!previewUrl) {
+      imageRef.current = null;
+      setImageMetrics(null);
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      imageRef.current = image;
+      setImageMetrics({ width: image.naturalWidth, height: image.naturalHeight });
+      setCrop({ centerX: 0.5, centerY: 0.5, zoom: 1 });
+      setImageVersion((current) => current + 1);
+    };
+    image.src = previewUrl;
+  }, [previewUrl]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    if (!canvas || !image || !cropRect) return;
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.drawImage(image, cropRect.x, cropRect.y, cropRect.size, cropRect.size, 0, 0, canvas.width, canvas.height);
+  }, [cropRect, imageVersion]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   function chooseFile(nextFile: File | null) {
     setError(null);
@@ -71,8 +171,8 @@ function App() {
   }
 
   async function createJob() {
-    if (!file) {
-      setError("请先把一张图片放到小屋画架里。");
+    if (!file || !cropRect) {
+      setError("请先上传图片，并在裁切框里确认要绘制的区域。");
       return;
     }
 
@@ -87,6 +187,9 @@ function App() {
       form.append("switchVersion", switchVersion);
       form.append("colourMatcher", colourMatcher);
       form.append("tspTimeLimit", String(tspTimeLimit));
+      form.append("cropX", cropRect.x.toFixed(3));
+      form.append("cropY", cropRect.y.toFixed(3));
+      form.append("cropSize", cropRect.size.toFixed(3));
 
       const response = await fetch(`${apiBase}/api/jobs`, {
         method: "POST",
@@ -107,42 +210,47 @@ function App() {
   }
 
   return (
-    <main className="dream-shell">
+    <main className="app-shell">
       <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">
+        <a className="brand" href="#studio">
+          <span className="brand-mark">
             <Home size={22} />
-          </div>
-          <div>
-            <h1>TomodachiDrawer-CN</h1>
-            <span>朋友收集梦想生活 · 画作转换小屋</span>
-          </div>
-        </div>
+          </span>
+          <span>
+            <strong>TomodachiDrawer-CN</strong>
+            <small>朋友收集梦想生活 · 画作转换</small>
+          </span>
+        </a>
         <nav>
+          <a href="#studio">生成</a>
+          <a href="#gallery">广场</a>
           <a href="https://github.com/Lucas7yoshi/TomodachiDrawer" target="_blank" rel="noreferrer">
-            <Github size={18} /> 源码 / GPL-3.0
+            <Github size={17} /> GPL-3.0
           </a>
-          <span className="service-ok"><Sparkles size={16} /> 服务在线</span>
+          <span className="language-pill">
+            <Languages size={16} /> 简体中文
+          </span>
         </nav>
       </header>
 
-      <section className="studio-banner">
-        <div className="banner-copy">
-          <h2>把一张图片放进小屋，生成绘画控制文件</h2>
-          <p>当前是最小测试版：上传、参数、任务和下载链路已可验证；公开作品仍需管理员审核。</p>
+      <section className="hero">
+        <div>
+          <p className="eyebrow"><Sparkles size={16} /> 公开测试版</p>
+          <h1>把任意尺寸图片裁进 1:1 画布，再生成单片机绘画文件</h1>
+          <p>
+            图片比例不对时，先在方形框里选取要画的部分。通过审核的作品后续会同时保留预览图和可下载文件。
+          </p>
         </div>
-        <div className="mini-island" aria-hidden="true">
-          <span className="sun" />
-          <span className="house house-one" />
-          <span className="house house-two" />
-          <span className="tree" />
-          <span className="cloud cloud-one" />
-          <span className="cloud cloud-two" />
+        <div className="status-strip" aria-label="当前能力">
+          <span><CheckCircle2 size={16} /> 大图裁切</span>
+          <span><CheckCircle2 size={16} /> TDLD / UF2</span>
+          <span><ShieldCheck size={16} /> 公开前审核</span>
         </div>
       </section>
 
-      <section className="workspace">
-        <Panel title="上传到画架" icon={<ImageUp size={18} />} tone="mint">
+      <section className="studio-grid" id="studio">
+        <section className="tool-panel upload-panel">
+          <PanelTitle icon={<ImageUp size={18} />} title="图片与裁切" />
           <label
             className="dropzone"
             onDragOver={(event) => event.preventDefault()}
@@ -156,64 +264,90 @@ function App() {
               accept="image/png,image/jpeg,image/webp"
               onChange={(event) => chooseFile(event.target.files?.item(0) ?? null)}
             />
-            <div className="easel">
-              {previewUrl ? (
-                <img src={previewUrl} alt="待生成图片预览" />
-              ) : (
-                <div className="dropzone-empty">
-                  <ImageUp size={42} />
-                  <strong>点击或拖拽图片</strong>
-                  <span>PNG / JPG / WEBP，建议 256x256 以内</span>
-                </div>
-              )}
-            </div>
+            <canvas ref={canvasRef} className="crop-canvas" width="256" height="256" />
+            {!previewUrl && (
+              <div className="dropzone-empty">
+                <ImageUp size={40} />
+                <strong>点击或拖拽图片</strong>
+                <span>PNG / JPG / WEBP，单文件 8MB 内</span>
+              </div>
+            )}
           </label>
 
           {selectedFileMeta && (
             <div className="file-card">
               <FileImage size={18} />
-              <div>
+              <span>
                 <strong>{selectedFileMeta.name}</strong>
-                <span>{selectedFileMeta.type} · {selectedFileMeta.size}</span>
-              </div>
+                <small>{selectedFileMeta.type} · {selectedFileMeta.size}</small>
+              </span>
               <button className="icon-button danger" onClick={() => chooseFile(null)} aria-label="移除图片">
                 <Trash2 size={16} />
               </button>
             </div>
           )}
 
-          <div className="note-row">
-            <CheckCircle2 size={18} />
-            <span>服务端会重新校验格式、大小并生成安全文件名。</span>
+          <div className="crop-controls">
+            <Field label={`缩放：${crop.zoom.toFixed(1)}x`}>
+              <input
+                type="range"
+                min="1"
+                max="4"
+                step="0.1"
+                value={crop.zoom}
+                disabled={!previewUrl}
+                onChange={(event) => setCrop((current) => ({ ...current, zoom: Number(event.target.value) }))}
+              />
+            </Field>
+            <Field label="左右取景">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={crop.centerX}
+                disabled={!previewUrl}
+                onChange={(event) => setCrop((current) => ({ ...current, centerX: Number(event.target.value) }))}
+              />
+            </Field>
+            <Field label="上下取景">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={crop.centerY}
+                disabled={!previewUrl}
+                onChange={(event) => setCrop((current) => ({ ...current, centerY: Number(event.target.value) }))}
+              />
+            </Field>
           </div>
-        </Panel>
+        </section>
 
-        <Panel title="绘画设置" icon={<SlidersHorizontal size={18} />} tone="peach">
-          <Field label="小板住户">
+        <section className="tool-panel settings-panel">
+          <PanelTitle icon={<SlidersHorizontal size={18} />} title="生成设置" />
+          <Field label="单片机类型">
             <Segmented value={boardType} onChange={setBoardType} options={["rp2040", "rp2350", "esp32-s3"]} />
           </Field>
-          <Field label="主机节奏">
+          <Field label="Switch 版本">
             <Segmented value={switchVersion} onChange={setSwitchVersion} options={["switch2", "switch1"]} />
           </Field>
-          <Field label="带走的文件">
+          <Field label="输出文件">
             <Segmented
               value={outputType}
               onChange={setOutputType}
               options={boardType === "esp32-s3" ? ["tdld"] : ["tdld", "uf2"]}
             />
-            <small className="field-hint">
-              RP2040/RP2350 可下载 UF2；ESP32-S3 先刷基础固件，再写入 TDLD。
-            </small>
           </Field>
-          <Field label="调色心情">
+          <Field label="颜色匹配">
             <select value={colourMatcher} onChange={(event) => setColourMatcher(event.target.value)}>
               <option value="arbitrary">自动匹配（推荐）</option>
-              <option value="cielab">柔和彩度 CIE Lab</option>
-              <option value="redmean">复古色感 Redmean</option>
-              <option value="euclidean">直接距离 Euclidean</option>
+              <option value="cielab">CIE Lab</option>
+              <option value="redmean">Redmean</option>
+              <option value="euclidean">Euclidean</option>
             </select>
           </Field>
-          <Field label={`路线耐心：${tspTimeLimit}s`}>
+          <Field label={`路线规划：${tspTimeLimit}s`}>
             <input
               type="range"
               min="10"
@@ -222,7 +356,6 @@ function App() {
               value={tspTimeLimit}
               onChange={(event) => setTspTimeLimit(Number(event.target.value))}
             />
-            <div className="range-labels"><span>快画</span><span>细画</span><span>慢慢画</span></div>
           </Field>
 
           {error && <div className="error-box">{error}</div>}
@@ -231,79 +364,119 @@ function App() {
             {busy ? <Loader2 className="spin" size={18} /> : <Play size={18} />}
             开始生成
           </button>
-        </Panel>
+        </section>
 
-        <Panel title="小屋队列" icon={<Loader2 size={18} />} tone="sky">
-          <div className="queue-house">
-            <div className="queue-roof">任务电梯</div>
-            <div className="job-list">
-              {jobs.length === 0 && <EmptyJobs />}
-              {jobs.map((job, index) => (
-                <article className={`job-card ${job.status}`} key={job.jobUuid}>
-                  <div className="room-number">{String(index + 1).padStart(2, "0")}</div>
-                  <div>
-                    <strong>{job.status === "success" ? "绘画包已准备好" : "正在排队"}</strong>
-                    <span>{job.fileName}</span>
-                    <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
-                  </div>
-                  {job.downloadUrl ? (
+        <section className="tool-panel jobs-panel">
+          <PanelTitle icon={<Loader2 size={18} />} title="生成结果" />
+          <div className="job-list">
+            {jobs.length === 0 && <EmptyJobs />}
+            {jobs.map((job, index) => (
+              <article className={`job-card ${job.status}`} key={job.jobUuid}>
+                <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="job-copy">
+                  <strong>{job.status === "success" ? "文件已生成" : "正在排队"}</strong>
+                  <small>{job.fileName}</small>
+                  <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
+                </span>
+                <span className="job-actions">
+                  {job.previewUrl && (
+                    <a className="ghost-button" href={`${apiBase}${job.previewUrl}`} target="_blank" rel="noreferrer">
+                      预览
+                    </a>
+                  )}
+                  {job.downloadUrl && (
                     <a className="download-button" href={`${apiBase}${job.downloadUrl}`}>
                       <Download size={16} /> 下载
                     </a>
-                  ) : (
-                    <span className="queue-chip">位置 {job.queuePosition}</span>
                   )}
-                </article>
-              ))}
-            </div>
+                </span>
+              </article>
+            ))}
           </div>
-        </Panel>
+        </section>
       </section>
 
-      <section className="gallery-band">
-        <div className="gallery-heading">
-          <Heart size={22} />
-          <div>
-            <h2>梦想生活作品墙</h2>
-            <p>公开展示前必须经管理员审核，默认生成结果不公开。</p>
-          </div>
+      <section className="gallery-section" id="gallery">
+        <div className="section-heading">
+          <span>
+            <Heart size={22} />
+            <strong>分享广场</strong>
+          </span>
+          <p>作品公开前必须审核。当前广场是前端示例数据，用于验证搜索、分类和排序体验。</p>
         </div>
-        <div className="gallery-preview">
-          {["海边小屋", "圆圆头像", "午后甜点", "星星衬衫"].map((item, index) => (
-            <div className="gallery-tile" key={item}>
-              <div className={`tile-art tile-${index + 1}`}>
-                <Palette size={20} />
-              </div>
-              <span>{item}</span>
-            </div>
+
+        <div className="gallery-toolbar">
+          <label className="search-box">
+            <Search size={17} />
+            <input
+              value={galleryQuery}
+              placeholder="搜索作品或分类"
+              onChange={(event) => setGalleryQuery(event.target.value)}
+            />
+          </label>
+          <Segmented
+            value={gallerySort}
+            onChange={(value) => setGallerySort(value as GallerySort)}
+            options={["popular", "latest", "random"]}
+          />
+        </div>
+
+        <div className="category-row">
+          {categories.map((category) => (
+            <button
+              type="button"
+              className={category === galleryCategory ? "selected" : ""}
+              onClick={() => setGalleryCategory(category)}
+              key={category}
+            >
+              {category}
+            </button>
           ))}
         </div>
-        <div className="license-note">
-          <ShieldCheck size={22} />
-          <span>基于 TomodachiDrawer 构建，遵循 GPL-3.0；本站与 Nintendo 无官方关联。</span>
+
+        <div className="gallery-grid">
+          {filteredGallery.map((item) => (
+            <article className="gallery-card" key={item.title}>
+              <div className={`sample-art ${item.tone}`}>
+                {gallerySort === "random" ? <Shuffle size={22} /> : <Palette size={22} />}
+              </div>
+              <div>
+                <strong>{item.title}</strong>
+                <small>{item.category} · {item.date}</small>
+              </div>
+              <span className="like-pill"><Heart size={15} /> {item.likes}</span>
+            </article>
+          ))}
         </div>
       </section>
+
+      <footer className="site-footer">
+        <span><ShieldCheck size={18} /> 基于 TomodachiDrawer 构建，遵循 GPL-3.0。</span>
+        <span>本站与 Nintendo 无官方关联。</span>
+      </footer>
     </main>
   );
 }
 
-function Panel({
-  title,
-  icon,
-  tone,
-  children
-}: {
-  title: string;
-  icon: React.ReactNode;
-  tone: "mint" | "peach" | "sky";
-  children: React.ReactNode;
-}) {
-  return (
-    <section className={`panel ${tone}`}>
-      <h2>{icon}{title}</h2>
-      {children}
-    </section>
-  );
+function computeCropRect(metrics: ImageMetrics | null, crop: CropControls): CropRect | null {
+  if (!metrics) return null;
+  const baseSize = Math.min(metrics.width, metrics.height);
+  const size = clamp(baseSize / crop.zoom, 1, baseSize);
+  const x = clamp(metrics.width * crop.centerX - size / 2, 0, metrics.width - size);
+  const y = clamp(metrics.height * crop.centerY - size / 2, 0, metrics.height - size);
+  return { x, y, size };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function stableRandomKey(value: string) {
+  return Array.from(value).reduce((total, char) => total + char.charCodeAt(0), 0) % 97;
+}
+
+function PanelTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return <h2 className="panel-title">{icon}{title}</h2>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -316,6 +489,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Segmented({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+  const labels: Record<string, string> = {
+    popular: "点赞最多",
+    latest: "最新发布",
+    random: "随机推荐"
+  };
+
   return (
     <div className="segmented">
       {options.map((option) => (
@@ -325,7 +504,7 @@ function Segmented({ value, options, onChange }: { value: string; options: strin
           onClick={() => onChange(option)}
           key={option}
         >
-          {option.toUpperCase()}
+          {labels[option] ?? option.toUpperCase()}
         </button>
       ))}
     </div>
@@ -335,9 +514,8 @@ function Segmented({ value, options, onChange }: { value: string; options: strin
 function EmptyJobs() {
   return (
     <div className="empty-jobs">
-      <span className="empty-face">:)</span>
-      <strong>还没有住户排队</strong>
-      <span>上传图片并开始生成后，任务会搬进这里。</span>
+      <strong>还没有生成记录</strong>
+      <span>上传图片、确认裁切后，文件会出现在这里。</span>
     </div>
   );
 }
