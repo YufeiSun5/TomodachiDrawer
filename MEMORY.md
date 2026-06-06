@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-06 19:20 +08:00
+Last updated: 2026-06-06 20:54 +08:00
 
 ## 当前阶段
 
@@ -27,6 +27,11 @@ Last updated: 2026-06-06 19:20 +08:00
 - 公网真实 RP2040 UF2 校验通过：UF2 magic、target `0x10100000`、family `E48BFF56`。
 - 公网真实 RP2350 UF2 校验通过：family `E48BFF57`。
 - API 发布包含 SkiaSharp Linux native assets，解决服务器 `libSkiaSharp.so` 缺失问题。
+- API 支持任意尺寸图片上传后按裁切参数重采样为 256x256，再进入 `TomodachiDrawer.Core`。
+- API 任务响应新增 `previewUrl`，服务端保存一份处理后的 PNG 预览图。
+- 前端新增 1:1 裁切画布、缩放/水平/垂直取景控制，PC 三栏和手机单列布局已截图验证。
+- 前端新增“分享广场”示例区，具备分类、搜索、点赞最多/最新/随机排序的前端交互；真实持久化广场和点赞 API 尚未完成。
+- 公网上传 800x300 PNG 裁切生成验证通过：TDLD magic/version/end byte、预览 PNG magic、RP2350 UF2 magic/family/target/end 均合法。
 
 ## AI 工程化状态清单
 
@@ -46,6 +51,7 @@ Last updated: 2026-06-06 19:20 +08:00
 - 创建 GitHub fork/备份远程后推送初始化提交。
 - 安装或使用服务器上的 .NET 10 SDK 进行上游构建验证。
 - 下一阶段做预览图保存、审核稿件持久化和真实图库/后台。
+- 下一阶段实现真实分享广场：用户投稿保存、管理员审核、作品预览图和各单片机文件持久化、搜索排序和点赞 API。
 - Docker Compose 构建需在 .NET SDK 镜像可拉取后再验证，或改为 host publish + runtime image 流程。
 - 当前上线使用 systemd + Nginx 路径方式：API 监听 `127.0.0.1:5080`，前端挂载 `/tomodachi/`。
 - 将私密服务器计划保留在仓库外；仓库内只记录不含密码的部署边界。
@@ -64,3 +70,4 @@ Last updated: 2026-06-06 19:20 +08:00
 - 2026-06-06 13:57 | GPT-5 Codex | 在服务器完成 .NET 构建和 API/Worker smoke 验证。
 - 2026-06-06 14:38 | GPT-5 Codex | 优化前端风格并上线到公网 `/tomodachi/`。
 - 2026-06-06 19:20 | GPT-5 Codex | 接入真实 Core 生成并通过公网 TDLD/UF2 校验。
+- 2026-06-06 20:54 | GPT-5 Codex | 支持任意尺寸裁切转换，新增服务端预览图和响应式分享广场示例，并完成公网大图 TDLD/UF2 校验。
