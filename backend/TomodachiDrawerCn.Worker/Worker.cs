@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
 namespace TomodachiDrawerCn.Worker;
 
 public sealed class Worker(ILogger<Worker> logger) : BackgroundService
