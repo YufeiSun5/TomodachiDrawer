@@ -433,8 +433,8 @@ a {
 }
 
 .segmented {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -450,9 +450,17 @@ select,
 }
 
 .segmented button {
+  flex: 1 1 120px;
   padding: 0 8px;
   cursor: pointer;
   font-weight: 800;
+}
+
+.field-hint {
+  color: #637780;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .segmented button.selected {
@@ -733,10 +741,6 @@ input[type="range"] {
 
   .banner-copy h2 {
     font-size: 24px;
-  }
-
-  .segmented {
-    grid-template-columns: 1fr;
   }
 
   .gallery-preview {

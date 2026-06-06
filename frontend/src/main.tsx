@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CheckCircle2,
@@ -41,6 +41,7 @@ function App() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [boardType, setBoardType] = useState("rp2040");
   const [outputType, setOutputType] = useState("tdld");
+  const [switchVersion, setSwitchVersion] = useState("switch2");
   const [colourMatcher, setColourMatcher] = useState("arbitrary");
   const [tspTimeLimit, setTspTimeLimit] = useState(30);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -55,6 +56,12 @@ function App() {
       type: file.type || "unknown"
     };
   }, [file]);
+
+  useEffect(() => {
+    if (boardType === "esp32-s3" && outputType === "uf2") {
+      setOutputType("tdld");
+    }
+  }, [boardType, outputType]);
 
   function chooseFile(nextFile: File | null) {
     setError(null);
@@ -77,6 +84,7 @@ function App() {
       form.append("image", file);
       form.append("boardType", boardType);
       form.append("outputType", outputType);
+      form.append("switchVersion", switchVersion);
       form.append("colourMatcher", colourMatcher);
       form.append("tspTimeLimit", String(tspTimeLimit));
 
@@ -184,8 +192,18 @@ function App() {
           <Field label="小板住户">
             <Segmented value={boardType} onChange={setBoardType} options={["rp2040", "rp2350", "esp32-s3"]} />
           </Field>
+          <Field label="主机节奏">
+            <Segmented value={switchVersion} onChange={setSwitchVersion} options={["switch2", "switch1"]} />
+          </Field>
           <Field label="带走的文件">
-            <Segmented value={outputType} onChange={setOutputType} options={["tdld", "uf2"]} />
+            <Segmented
+              value={outputType}
+              onChange={setOutputType}
+              options={boardType === "esp32-s3" ? ["tdld"] : ["tdld", "uf2"]}
+            />
+            <small className="field-hint">
+              RP2040/RP2350 可下载 UF2；ESP32-S3 先刷基础固件，再写入 TDLD。
+            </small>
           </Field>
           <Field label="调色心情">
             <select value={colourMatcher} onChange={(event) => setColourMatcher(event.target.value)}>

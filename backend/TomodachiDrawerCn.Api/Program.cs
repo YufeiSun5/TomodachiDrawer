@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
-using System.Text;
 using Microsoft.AspNetCore.Http.Features;
+using TomodachiDrawer.Core.Models;
+using TomodachiDrawerCn.Api.Generation;
 using TomodachiDrawerCn.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -72,23 +73,51 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
         await image.CopyToAsync(stream);
     }
 
-    var outputType = GetFormValue(form, "outputType", "tdld").ToLowerInvariant() == "uf2" ? "uf2" : "tdld";
+    var boardType = NormalizeBoardType(GetFormValue(form, "boardType", "rp2040"));
+    var requestedOutputType = GetFormValue(form, "outputType", "tdld").ToLowerInvariant();
+    var outputType = requestedOutputType == "uf2" && DrawingGenerator.IsUf2Supported(boardType)
+        ? "uf2"
+        : "tdld";
     var outputPath = Path.Combine(outputDir, $"{jobUuid}.{outputType}");
-    await File.WriteAllBytesAsync(outputPath, BuildPlaceholderOutput(jobUuid, image.FileName, outputType));
+    var switchVersion = ParseSwitchVersion(GetFormValue(form, "switchVersion", "switch2"));
+    var tspTimeLimit = int.TryParse(GetFormValue(form, "tspTimeLimit", "30"), out var parsedTspTimeLimit)
+        ? parsedTspTimeLimit
+        : 30;
+    var colourMatcher = GetFormValue(form, "colourMatcher", "arbitrary");
+
+    GeneratedDrawing generated;
+    try
+    {
+        generated = await DrawingGenerator.GenerateAsync(
+            new GenerateDrawingRequest(
+                storedImagePath,
+                outputPath,
+                boardType,
+                outputType,
+                colourMatcher,
+                tspTimeLimit,
+                switchVersion
+            )
+        );
+    }
+    catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 
     var record = new JobRecord(
         jobUuid,
         Path.GetFileName(image.FileName),
-        GetFormValue(form, "boardType", "rp2040"),
-        outputType,
-        GetFormValue(form, "colourMatcher", "arbitrary"),
-        int.TryParse(GetFormValue(form, "tspTimeLimit", "30"), out var tspTimeLimit) ? tspTimeLimit : 30,
+        boardType,
+        generated.OutputType,
+        colourMatcher,
+        tspTimeLimit,
         JobStatuses.Success,
         0,
         DateTimeOffset.UtcNow,
         storedImagePath,
         outputPath,
-        "MVP placeholder output generated. Core drawing integration is the next implementation step."
+        $"Generated with TomodachiDrawer.Core. TDLD={generated.TdldBytes} bytes, output={generated.OutputBytes} bytes, estimated draw time={generated.EstimatedDrawTime.TotalSeconds:F1}s."
     );
 
     jobs[jobUuid] = record;
@@ -122,11 +151,23 @@ static string GetFormValue(IFormCollection form, string key, string fallback)
         : fallback;
 }
 
-static byte[] BuildPlaceholderOutput(string jobUuid, string fileName, string outputType)
+static string NormalizeBoardType(string boardType)
 {
-    var header = outputType == "tdld" ? "TDLD" : "UF2_PLACEHOLDER";
-    var body = $"{header}\njob={jobUuid}\nsource={fileName}\ngenerated_at={DateTimeOffset.UtcNow:O}\n";
-    return Encoding.UTF8.GetBytes(body);
+    return boardType.ToLowerInvariant() switch
+    {
+        "rp2350" => "rp2350",
+        "esp32-s3" or "esp32s3" => "esp32-s3",
+        _ => "rp2040",
+    };
+}
+
+static SwitchVersion ParseSwitchVersion(string switchVersion)
+{
+    return switchVersion.ToLowerInvariant() switch
+    {
+        "switch1" => SwitchVersion.Switch1,
+        _ => SwitchVersion.Switch2,
+    };
 }
 
 static JobResponse ToResponse(JobRecord record) =>

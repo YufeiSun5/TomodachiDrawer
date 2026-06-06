@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawerCn.Contracts\TomodachiDrawerCn.Contracts.csproj" />
+    <ProjectReference Include="..\..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
   </ItemGroup>
 </Project>
