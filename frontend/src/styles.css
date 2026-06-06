@@ -422,6 +422,23 @@ input[type="range"] {
   gap: 10px;
 }
 
+.temporary-downloads {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d8e7eb;
+}
+
+.temporary-downloads > strong {
+  color: #294a55;
+}
+
+.temporary-downloads > small {
+  color: #607780;
+  line-height: 1.5;
+}
+
 .empty-jobs {
   display: grid;
   place-items: center;
@@ -445,6 +462,10 @@ input[type="range"] {
   background: #ffffff;
   border: 1px solid #d7e6ea;
   border-radius: 8px;
+}
+
+.job-card.compact {
+  align-items: flex-start;
 }
 
 .job-card.success {

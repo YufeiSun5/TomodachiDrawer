@@ -104,6 +104,14 @@ function App() {
   }, [file]);
 
   const cropRect = useMemo(() => computeCropRect(imageMetrics, crop), [imageMetrics, crop]);
+  const activeJobs = useMemo(
+    () => jobs.filter((job) => job.status === "pending" || job.status === "running"),
+    [jobs]
+  );
+  const completedJobs = useMemo(
+    () => jobs.filter((job) => job.status === "success" || job.status === "failed"),
+    [jobs]
+  );
 
   const filteredGallery = useMemo(() => {
     const query = galleryQuery.trim().toLowerCase();
@@ -153,7 +161,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const activeJobs = jobs.filter((job) => job.status === "pending" || job.status === "running");
     if (activeJobs.length === 0) return;
 
     const timer = window.setInterval(async () => {
@@ -174,7 +181,7 @@ function App() {
     }, 2500);
 
     return () => window.clearInterval(timer);
-  }, [jobs]);
+  }, [activeJobs]);
 
   useEffect(() => {
     if (!previewUrl) {
@@ -417,13 +424,13 @@ function App() {
         </section>
 
         <section className="tool-panel jobs-panel">
-          <PanelTitle icon={<Loader2 size={18} />} title="生成结果" />
+          <PanelTitle icon={<Loader2 size={18} />} title="实时队列" />
           <div className="job-list">
-            {jobs.length === 0 && <EmptyJobs />}
-              {jobs.map((job, index) => (
-                <article className={`job-card ${job.status}`} key={job.jobUuid}>
-                  <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
-                  <span className="job-copy">
+            {activeJobs.length === 0 && <EmptyJobs />}
+            {activeJobs.map((job, index) => (
+              <article className={`job-card ${job.status}`} key={job.jobUuid}>
+                <span className="room-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="job-copy">
                   <strong>{jobStatusText(job)}</strong>
                   <small>{job.fileName}</small>
                   <small>{job.boardType} · {job.outputType.toUpperCase()} · {job.colourMatcher}</small>
@@ -431,7 +438,7 @@ function App() {
                   <span className="progress-track" aria-label={`任务进度 ${job.progressPercent}%`}>
                     <span style={{ width: `${Math.max(2, job.progressPercent)}%` }} />
                   </span>
-                  {job.message && <small className="job-message">{job.message}</small>}
+                  {job.message && <small className="job-message">{formatJobMessage(job.message)}</small>}
                 </span>
                 <span className="job-actions">
                   {job.previewUrl && (
@@ -448,6 +455,33 @@ function App() {
               </article>
             ))}
           </div>
+          {completedJobs.length > 0 && (
+            <div className="temporary-downloads">
+              <strong>临时下载</strong>
+              <small>未投稿结果不会进入历史列表，下载窗口约 30 分钟。</small>
+              {completedJobs.slice(0, 5).map((job) => (
+                <article className={`job-card compact ${job.status}`} key={job.jobUuid}>
+                  <span className="job-copy">
+                    <strong>{jobStatusText(job)}</strong>
+                    <small>{job.fileName}</small>
+                    {job.message && <small className="job-message">{formatJobMessage(job.message)}</small>}
+                  </span>
+                  <span className="job-actions">
+                    {job.previewUrl && (
+                      <a className="ghost-button" href={`${apiBase}${job.previewUrl}`} target="_blank" rel="noreferrer">
+                        预览
+                      </a>
+                    )}
+                    {job.downloadUrl && (
+                      <a className="download-button" href={`${apiBase}${job.downloadUrl}`}>
+                        <Download size={16} /> 下载
+                      </a>
+                    )}
+                  </span>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </section>
 
@@ -552,6 +586,21 @@ function jobQueueText(job: Job) {
   }
 
   return "请检查提示后重新提交";
+}
+
+function formatJobMessage(message: string) {
+  const layerMatch = message.match(/\[(\d+)\/(\d+)\]\s+\(([^)]+)\).*->\s+(\w+)/);
+  if (layerMatch) {
+    const [, current, total, colour, route] = layerMatch;
+    const routeName = route.toLowerCase() === "tsp" ? "优化路线" : "顺序路线";
+    return `正在处理第 ${current}/${total} 个颜色层，颜色 RGB(${colour})，选择${routeName}。`;
+  }
+
+  if (message.includes("Stamps:")) {
+    return "正在计算大色块和印章路线。";
+  }
+
+  return message;
 }
 
 function PanelTitle({ icon, title }: { icon: React.ReactNode; title: string }) {

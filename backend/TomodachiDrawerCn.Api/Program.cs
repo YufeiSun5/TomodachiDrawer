@@ -34,6 +34,10 @@ var queue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
 });
 var queueLock = new object();
 string? runningJobUuid = null;
+var transientJobRetention = TimeSpan.FromMinutes(30);
+CleanupDirectoryFiles(uploadDir, transientJobRetention, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+CleanupDirectoryFiles(outputDir, transientJobRetention, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+CleanupDirectoryFiles(previewDir, transientJobRetention, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 _ = Task.Run(async () =>
 {
@@ -101,6 +105,8 @@ _ = Task.Run(async () =>
         }
         finally
         {
+            TryDeleteFile(record.SourceImagePath);
+
             lock (queueLock)
             {
                 if (runningJobUuid == jobUuid)
@@ -114,6 +120,19 @@ _ = Task.Run(async () =>
     }
 });
 
+_ = Task.Run(async () =>
+{
+    using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+    while (await timer.WaitForNextTickAsync())
+    {
+        CleanupTransientJobs(jobs, transientJobRetention);
+        var knownJobIds = jobs.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        CleanupDirectoryFiles(uploadDir, transientJobRetention, knownJobIds);
+        CleanupDirectoryFiles(outputDir, transientJobRetention, knownJobIds);
+        CleanupDirectoryFiles(previewDir, transientJobRetention, knownJobIds);
+    }
+});
+
 app.MapGet("/api/health", () =>
     Results.Ok(new HealthResponse("ok", "tomodachi-cn-api", DateTimeOffset.UtcNow, "0.1.0"))
 );
@@ -123,6 +142,7 @@ app.MapGet("/api/jobs", () =>
     RefreshQueuePositions(jobs, runningJobUuid);
     return Results.Ok(
         jobs.Values
+            .Where(job => job.Status == JobStatuses.Pending || job.Status == JobStatuses.Running)
             .OrderByDescending(job => job.CreatedAt)
             .Take(50)
             .Select(ToResponse)
@@ -317,6 +337,74 @@ static JobResponse ToResponse(JobRecord record) =>
         File.Exists(record.PreviewPath) ? $"/api/jobs/{record.JobUuid}/preview" : null,
         record.Message
     );
+
+static void CleanupTransientJobs(ConcurrentDictionary<string, JobRecord> jobs, TimeSpan retention)
+{
+    var now = DateTimeOffset.UtcNow;
+    foreach (var record in jobs.Values)
+    {
+        if (record.Status == JobStatuses.Pending || record.Status == JobStatuses.Running)
+        {
+            continue;
+        }
+
+        var completedAt = record.CompletedAt ?? record.CreatedAt;
+        if (now - completedAt < retention)
+        {
+            continue;
+        }
+
+        if (!jobs.TryRemove(record.JobUuid, out _))
+        {
+            continue;
+        }
+
+        TryDeleteFile(record.SourceImagePath);
+        TryDeleteFile(record.OutputPath);
+        TryDeleteFile(Path.ChangeExtension(record.OutputPath, ".tdld"));
+        TryDeleteFile(record.PreviewPath);
+    }
+}
+
+static void CleanupDirectoryFiles(string directory, TimeSpan retention, IReadOnlySet<string> knownJobIds)
+{
+    var cutoff = DateTimeOffset.UtcNow - retention;
+    foreach (var path in Directory.EnumerateFiles(directory))
+    {
+        try
+        {
+            if (knownJobIds.Contains(Path.GetFileNameWithoutExtension(path)))
+            {
+                continue;
+            }
+
+            var lastWriteTime = File.GetLastWriteTimeUtc(path);
+            if (lastWriteTime < cutoff)
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup; failed deletes will be retried by the next cleanup pass.
+        }
+    }
+}
+
+static void TryDeleteFile(string path)
+{
+    try
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+    catch
+    {
+        // Best-effort cleanup; failed deletes will be retried by the next cleanup pass.
+    }
+}
 
 static void RefreshQueuePositions(ConcurrentDictionary<string, JobRecord> jobs, string? runningJobUuid)
 {
