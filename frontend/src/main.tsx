@@ -59,7 +59,8 @@ type CropRect = {
 
 type GallerySort = "popular" | "latest" | "random";
 
-const apiBase = import.meta.env.VITE_API_BASE ?? "";
+const viteBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+const apiBase = import.meta.env.VITE_API_BASE ?? (viteBase === "" || viteBase === "/" ? "" : viteBase);
 
 type GalleryItem = {
   galleryId: string;

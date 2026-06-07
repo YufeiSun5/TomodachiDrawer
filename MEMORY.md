@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-07 00:14 +08:00
+Last updated: 2026-06-07 10:03 +08:00
 
 ## 当前阶段
 
@@ -48,6 +48,8 @@ Last updated: 2026-06-07 00:14 +08:00
 - 最终公网复验通过：非本人直接查询 jobUuid 返回 404；重复名称广场投稿持久化后列表显示两个同名 RP2040 条目；广场缩略图下载为合法 PNG；复验结束时 active job 列表为空。
 - 修复 HTTP 访问黑屏：前端 `clientId` 生成不再直接依赖 `crypto.randomUUID()`，非安全上下文会降级到 `crypto.getRandomValues` 或时间戳随机值。
 - 黑屏修复已部署前端静态文件；部署前 active jobs 为空，部署后公网 HTML/JS/API 均 200，本地 HTTP preview 截图验证页面可挂载。
+- 修复前端 API base：`/tomodachi/` 路径部署时自动请求 `/tomodachi/api/...`，避免误打到服务器根路径 `/api/jobs` 的既有服务并返回 404。
+- API base 修复已部署前端静态文件；部署前 active jobs 为空，部署后公网入口引用 `index-DSHeJ4yR.js`，`/tomodachi/api/jobs` 和 `/tomodachi/api/gallery` 均 200。
 
 ## AI 工程化状态清单
 
