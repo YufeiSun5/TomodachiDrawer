@@ -35,6 +35,7 @@
 | TD-CN-016 | `backend-ai/frontend-ai` | implementation | closed | 任务隐私、我的缩略图、分享到广场、首屏广场和按单片机分类。 | 已增加 clientId 区分我的/他人任务；他人任务匿名；生成成功可命名分享到持久化广场。 |
 | TD-CN-017 | `frontend-ai/test-ai` | bug | closed | HTTP 公网访问前端黑屏。 | `crypto.randomUUID()` 在部分非安全上下文不可用；已增加 clientId fallback 并部署前端静态文件。 |
 | TD-CN-018 | `frontend-ai/test-ai` | bug | closed | 前端请求根路径 `/api/jobs` 返回 404。 | 已改为根据 Vite base 自动使用 `/tomodachi/api/...`；不改服务器根 `/api`，避免影响既有服务。 |
+| TD-CN-019 | `backend-ai/frontend-ai/test-ai` | bug | closed | PNG 透明区域被合成白底并绘制。 | 服务端预处理改为透明画布，前端预览保留透明；线上 alpha smoke 通过。 |
 
 ## Board Rules
 
@@ -80,3 +81,4 @@
 - 2026-06-06 23:02 | `test-ai` | test | final public gallery verification | closed | 公网复验非本人直接 job 查询 404、重复名称分享到广场、RP2040 广场列表保留两个同名条目、缩略图 PNG magic 正确，结束时 active jobs 为空。
 - 2026-06-07 00:14 | `frontend-ai/test-ai` | answer | public black screen | closed | 修复 HTTP 下 `crypto.randomUUID()` 不可用导致的 React 初始化失败；部署前 active jobs 为空，公网 HTML/JS/API 200，本地 HTTP preview 截图非空。
 - 2026-06-07 10:03 | `frontend-ai/test-ai` | answer | api base 404 | closed | 修复 `/tomodachi/` 前端误请求根 `/api/jobs`；部署前 active jobs 为空，公网新 JS 引用、`/tomodachi/api/jobs`、`/tomodachi/api/gallery` 均 200。
+- 2026-06-09 15:25 | `backend-ai/frontend-ai/test-ai` | answer | alpha background | closed | 修复透明 PNG 被合成白底；部署前 active jobs 为空，服务器 publish 通过，公网透明 PNG smoke 预览角落 alpha=0、中心 alpha=255。

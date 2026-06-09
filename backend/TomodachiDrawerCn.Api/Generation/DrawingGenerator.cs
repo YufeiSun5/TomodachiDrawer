@@ -121,7 +121,7 @@ internal static class DrawingGenerator
 
         var prepared = new SKBitmap(CanvasDrawer.CanvasWidth, CanvasDrawer.CanvasHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var canvas = new SKCanvas(prepared);
-        canvas.Clear(SKColors.White);
+        canvas.Clear(SKColors.Transparent);
         var sourceRect = SKRect.Create(cropX, cropY, cropSize, cropSize);
         var destinationRect = SKRect.Create(0, 0, CanvasDrawer.CanvasWidth, CanvasDrawer.CanvasHeight);
         canvas.DrawBitmap(source, sourceRect, destinationRect);

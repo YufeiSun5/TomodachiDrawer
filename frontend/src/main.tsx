@@ -243,8 +243,7 @@ function App() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.clearRect(0, 0, canvas.width, canvas.height);
     context.imageSmoothingEnabled = true;
     context.drawImage(image, cropRect.x, cropRect.y, cropRect.size, cropRect.size, 0, 0, canvas.width, canvas.height);
   }, [cropRect, imageVersion]);
@@ -470,6 +469,8 @@ function App() {
               </button>
             </div>
           )}
+
+          <p className="transparent-note">PNG / WEBP 透明区域会保留为不绘制，画布底色取决于游戏里当前画布。</p>
 
           <div className="crop-controls">
             <Field label={`缩放：${crop.zoom.toFixed(1)}x`}>

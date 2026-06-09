@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-07 10:03 +08:00
+Last updated: 2026-06-09 15:25 +08:00
 
 ## 当前阶段
 
@@ -50,6 +50,8 @@ Last updated: 2026-06-07 10:03 +08:00
 - 黑屏修复已部署前端静态文件；部署前 active jobs 为空，部署后公网 HTML/JS/API 均 200，本地 HTTP preview 截图验证页面可挂载。
 - 修复前端 API base：`/tomodachi/` 路径部署时自动请求 `/tomodachi/api/...`，避免误打到服务器根路径 `/api/jobs` 的既有服务并返回 404。
 - API base 修复已部署前端静态文件；部署前 active jobs 为空，部署后公网入口引用 `index-DSHeJ4yR.js`，`/tomodachi/api/jobs` 和 `/tomodachi/api/gallery` 均 200。
+- 修复 PNG/WEBP 透明背景：服务端裁切重采样不再把 alpha 合成白底，透明像素会进入 Core 的跳过绘制路径；前端裁切预览也保留透明并增加说明。
+- 透明背景修复已部署；发布前 active jobs 为空，服务器 `dotnet publish` 通过，公网透明 PNG smoke 验证预览角落 alpha=0、中心 alpha=255。
 
 ## AI 工程化状态清单
 
