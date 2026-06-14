@@ -84,6 +84,8 @@ _ = Task.Run(async () =>
                     record.CropX,
                     record.CropY,
                     record.CropSize,
+                    record.WhiteToTransparent,
+                    record.WhiteThreshold,
                     progress =>
                     {
                         record.ProgressPercent = Math.Max(record.ProgressPercent, progress.Percent);
@@ -233,6 +235,8 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
     var cropX = ParseDoubleFormValue(form, "cropX");
     var cropY = ParseDoubleFormValue(form, "cropY");
     var cropSize = ParseDoubleFormValue(form, "cropSize");
+    var whiteToTransparent = ParseBoolFormValue(form, "whiteToTransparent");
+    var whiteThreshold = ParseIntFormValue(form, "whiteThreshold", 245, 200, 255);
 
     var record = new JobRecord(
         jobUuid,
@@ -256,6 +260,8 @@ app.MapPost("/api/jobs", async (HttpRequest request) =>
         cropX,
         cropY,
         cropSize,
+        whiteToTransparent,
+        whiteThreshold,
         "任务已进入队列。"
     );
 
@@ -427,6 +433,20 @@ static double? ParseDoubleFormValue(IFormCollection form, string key)
         && double.TryParse(value.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
         ? parsed
         : null;
+}
+
+static bool ParseBoolFormValue(IFormCollection form, string key)
+{
+    return form.TryGetValue(key, out var value)
+        && bool.TryParse(value.ToString(), out var parsed)
+        && parsed;
+}
+
+static int ParseIntFormValue(IFormCollection form, string key, int fallback, int min, int max)
+{
+    return form.TryGetValue(key, out var value) && int.TryParse(value.ToString(), out var parsed)
+        ? Math.Clamp(parsed, min, max)
+        : fallback;
 }
 
 static string NormalizeBoardType(string boardType)
@@ -661,6 +681,8 @@ internal sealed class JobRecord(
     double? CropX,
     double? CropY,
     double? CropSize,
+    bool WhiteToTransparent,
+    int WhiteThreshold,
     string Message
 )
 {
@@ -685,6 +707,8 @@ internal sealed class JobRecord(
     public double? CropX { get; } = CropX;
     public double? CropY { get; } = CropY;
     public double? CropSize { get; } = CropSize;
+    public bool WhiteToTransparent { get; } = WhiteToTransparent;
+    public int WhiteThreshold { get; } = WhiteThreshold;
     public string Message { get; set; } = Message;
 }
 

@@ -1,6 +1,6 @@
 # MEMORY
 
-Last updated: 2026-06-09 15:25 +08:00
+Last updated: 2026-06-14 09:37 +08:00
 
 ## 当前阶段
 
@@ -52,6 +52,8 @@ Last updated: 2026-06-09 15:25 +08:00
 - API base 修复已部署前端静态文件；部署前 active jobs 为空，部署后公网入口引用 `index-DSHeJ4yR.js`，`/tomodachi/api/jobs` 和 `/tomodachi/api/gallery` 均 200。
 - 修复 PNG/WEBP 透明背景：服务端裁切重采样不再把 alpha 合成白底，透明像素会进入 Core 的跳过绘制路径；前端裁切预览也保留透明并增加说明。
 - 透明背景修复已部署；发布前 active jobs 为空，服务器 `dotnet publish` 通过，公网透明 PNG smoke 验证预览角落 alpha=0、中心 alpha=255。
+- 新增“白色背景设为透明”开关：前端表单支持白底抠透明和阈值设置，后端只移除连通到图片边缘的近白区域，降低误删主体内部白色的风险。
+- 白底抠透明已部署；发布前 active jobs 为空，服务器 `dotnet publish` 通过，公网 smoke 验证角落白底 alpha=0、红色主体 alpha=255、主体内部白色 alpha=255。
 
 ## AI 工程化状态清单
 

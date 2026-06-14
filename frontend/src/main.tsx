@@ -94,6 +94,8 @@ function App() {
   const [switchVersion, setSwitchVersion] = useState("switch2");
   const [colourMatcher, setColourMatcher] = useState("arbitrary");
   const [tspTimeLimit, setTspTimeLimit] = useState(30);
+  const [whiteToTransparent, setWhiteToTransparent] = useState(false);
+  const [whiteThreshold, setWhiteThreshold] = useState(245);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,7 +248,10 @@ function App() {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.imageSmoothingEnabled = true;
     context.drawImage(image, cropRect.x, cropRect.y, cropRect.size, cropRect.size, 0, 0, canvas.width, canvas.height);
-  }, [cropRect, imageVersion]);
+    if (whiteToTransparent) {
+      makeCanvasEdgeWhiteTransparent(canvas, whiteThreshold);
+    }
+  }, [cropRect, imageVersion, whiteThreshold, whiteToTransparent]);
 
   useEffect(() => {
     return () => {
@@ -282,6 +287,8 @@ function App() {
       form.append("cropX", cropRect.x.toFixed(3));
       form.append("cropY", cropRect.y.toFixed(3));
       form.append("cropSize", cropRect.size.toFixed(3));
+      form.append("whiteToTransparent", String(whiteToTransparent));
+      form.append("whiteThreshold", String(whiteThreshold));
 
       const response = await fetch(`${apiBase}/api/jobs`, {
         method: "POST",
@@ -532,6 +539,30 @@ function App() {
               <option value="euclidean">Euclidean</option>
             </select>
           </Field>
+          <div className="background-options">
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={whiteToTransparent}
+                onChange={(event) => setWhiteToTransparent(event.target.checked)}
+              />
+              <span>
+                白色背景设为透明
+                <small>只移除连到图片边缘的近白区域，主体内部白色尽量保留。</small>
+              </span>
+            </label>
+            <Field label={`白色阈值：${whiteThreshold}`}>
+              <input
+                type="range"
+                min="200"
+                max="255"
+                step="1"
+                value={whiteThreshold}
+                disabled={!whiteToTransparent}
+                onChange={(event) => setWhiteThreshold(Number(event.target.value))}
+              />
+            </Field>
+          </div>
           <Field label={`路线规划：${tspTimeLimit}s`}>
             <input
               type="range"
@@ -658,6 +689,53 @@ function computeCropRect(metrics: ImageMetrics | null, crop: CropControls): Crop
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function makeCanvasEdgeWhiteTransparent(canvas: HTMLCanvasElement, threshold: number) {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  const { width, height } = canvas;
+  const imageData = context.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  const visited = new Uint8Array(width * height);
+  const queue: Array<[number, number]> = [];
+
+  function isNearWhite(x: number, y: number) {
+    const offset = (y * width + x) * 4;
+    return data[offset + 3] >= 128
+      && data[offset] >= threshold
+      && data[offset + 1] >= threshold
+      && data[offset + 2] >= threshold;
+  }
+
+  function enqueueIfWhite(x: number, y: number) {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const index = y * width + x;
+    if (visited[index]) return;
+    visited[index] = 1;
+    if (isNearWhite(x, y)) queue.push([x, y]);
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    enqueueIfWhite(x, 0);
+    enqueueIfWhite(x, height - 1);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    enqueueIfWhite(0, y);
+    enqueueIfWhite(width - 1, y);
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const [x, y] = queue[cursor];
+    data[(y * width + x) * 4 + 3] = 0;
+    enqueueIfWhite(x + 1, y);
+    enqueueIfWhite(x - 1, y);
+    enqueueIfWhite(x, y + 1);
+    enqueueIfWhite(x, y - 1);
+  }
+
+  context.putImageData(imageData, 0, 0);
 }
 
 function stableRandomKey(value: string) {

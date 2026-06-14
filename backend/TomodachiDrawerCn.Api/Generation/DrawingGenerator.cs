@@ -127,8 +127,69 @@ internal static class DrawingGenerator
         canvas.DrawBitmap(source, sourceRect, destinationRect);
         canvas.Flush();
 
+        if (request.WhiteToTransparent)
+        {
+            MakeEdgeWhiteTransparent(prepared, request.WhiteThreshold);
+        }
+
         return prepared;
     }
+
+    private static void MakeEdgeWhiteTransparent(SKBitmap bitmap, int threshold)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        var visited = new bool[width * height];
+        var queue = new Queue<(int X, int Y)>();
+
+        void EnqueueIfWhite(int x, int y)
+        {
+            if ((uint)x >= width || (uint)y >= height)
+            {
+                return;
+            }
+
+            var index = y * width + x;
+            if (visited[index])
+            {
+                return;
+            }
+
+            visited[index] = true;
+            if (IsNearWhite(bitmap.GetPixel(x, y), threshold))
+            {
+                queue.Enqueue((x, y));
+            }
+        }
+
+        for (var x = 0; x < width; x++)
+        {
+            EnqueueIfWhite(x, 0);
+            EnqueueIfWhite(x, height - 1);
+        }
+
+        for (var y = 1; y < height - 1; y++)
+        {
+            EnqueueIfWhite(0, y);
+            EnqueueIfWhite(width - 1, y);
+        }
+
+        while (queue.Count > 0)
+        {
+            var (x, y) = queue.Dequeue();
+            bitmap.SetPixel(x, y, SKColors.Transparent);
+            EnqueueIfWhite(x + 1, y);
+            EnqueueIfWhite(x - 1, y);
+            EnqueueIfWhite(x, y + 1);
+            EnqueueIfWhite(x, y - 1);
+        }
+    }
+
+    private static bool IsNearWhite(SKColor colour, int threshold) =>
+        colour.Alpha >= 128
+        && colour.Red >= threshold
+        && colour.Green >= threshold
+        && colour.Blue >= threshold;
 
     private static void SavePreparedPreview(SKBitmap preparedImage, string previewPath)
     {
@@ -207,6 +268,8 @@ internal sealed record GenerateDrawingRequest(
     double? CropX,
     double? CropY,
     double? CropSize,
+    bool WhiteToTransparent,
+    int WhiteThreshold,
     Action<GeneratedDrawingProgress>? ProgressReporter = null
 )
 {
